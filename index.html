@@ -1,0 +1,2031 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi Asistente Financiero</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#f5f6fa; --card:#ffffff; --text:#1a1c23; --muted:#6b7280; --border:#e5e7eb;
+  --accent:#2563eb; --accent-soft:#dbeafe; --green:#16a34a; --green-soft:#dcfce7;
+  --yellow:#d97706; --yellow-soft:#fef3c7; --red:#dc2626; --red-soft:#fee2e2;
+  --income:#0891b2; --income-soft:#cffafe;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111318; --card:#1a1d24; --text:#e8e9ec; --muted:#9aa0ab; --border:#2b2f38;
+    --accent:#60a5fa; --accent-soft:#1e3a5f; --green:#4ade80; --green-soft:#14432a;
+    --yellow:#fbbf24; --yellow-soft:#4a3a12; --red:#f87171; --red-soft:#4a1d1d;
+    --income:#22d3ee; --income-soft:#0e3a44;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111318; --card:#1a1d24; --text:#e8e9ec; --muted:#9aa0ab; --border:#2b2f38;
+  --accent:#60a5fa; --accent-soft:#1e3a5f; --green:#4ade80; --green-soft:#14432a;
+  --yellow:#fbbf24; --yellow-soft:#4a3a12; --red:#f87171; --red-soft:#4a1d1d;
+  --income:#22d3ee; --income-soft:#0e3a44;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  padding-bottom:40px;
+}
+header{
+  padding:20px 16px 12px; text-align:center; border-bottom:1px solid var(--border);
+  background:var(--card);
+}
+header h1{margin:0 0 4px; font-size:1.4rem;}
+header p{margin:0; color:var(--muted); font-size:0.85rem;}
+nav{
+  display:flex; gap:6px; overflow-x:auto; padding:10px 12px; background:var(--card);
+  border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;
+}
+nav button{
+  flex:0 0 auto; padding:8px 14px; border-radius:20px; border:1px solid var(--border);
+  background:var(--bg); color:var(--text); font-size:0.85rem; cursor:pointer; white-space:nowrap;
+  position:relative;
+}
+nav button.active{background:var(--accent); color:#fff; border-color:var(--accent);}
+nav button .badge{
+  background:var(--red); color:#fff; border-radius:10px; font-size:0.65rem; padding:1px 6px;
+  margin-left:6px;
+}
+main{max-width:900px; margin:0 auto; padding:16px;}
+.card{
+  background:var(--card); border:1px solid var(--border); border-radius:14px;
+  padding:16px; margin-bottom:14px;
+}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+@media (max-width:520px){.grid3{grid-template-columns:1fr;}}
+.stat{text-align:center;}
+.stat .label{font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.03em;}
+.stat .value{font-size:1.4rem; font-weight:700; margin-top:2px;}
+.month-nav{display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px;}
+.month-nav button{
+  border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:8px;
+  width:34px; height:34px; font-size:1rem; cursor:pointer;
+}
+.month-nav .label{font-weight:600; min-width:150px; text-align:center;}
+h2.section-title{font-size:1rem; margin:22px 0 10px;}
+h3.cat-title{font-size:0.95rem; margin:0 0 8px; display:flex; justify-content:space-between; align-items:center;}
+.bar-row{margin-bottom:14px;}
+.bar-track{
+  background:var(--border); border-radius:8px; height:10px; overflow:hidden; margin-top:4px;
+}
+.bar-fill{height:100%; border-radius:8px; transition:width .3s;}
+.bar-meta{display:flex; justify-content:space-between; font-size:0.78rem; color:var(--muted); margin-top:3px;}
+.pct-ok{background:var(--green);} .pct-warn{background:var(--yellow);} .pct-over{background:var(--red);}
+.alert{
+  display:flex; gap:8px; align-items:flex-start; padding:10px 12px; border-radius:10px;
+  margin-bottom:8px; font-size:0.85rem;
+}
+.alert.warn{background:var(--yellow-soft); color:var(--yellow);}
+.alert.danger{background:var(--red-soft); color:var(--red);}
+.alert.ok{background:var(--green-soft); color:var(--green);}
+table{width:100%; border-collapse:collapse; font-size:0.85rem;}
+.table-wrap{overflow-x:auto;}
+th,td{padding:8px 6px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap;}
+th{color:var(--muted); font-weight:600; font-size:0.75rem; text-transform:uppercase;}
+tr:last-child td{border-bottom:none;}
+select,input[type=text],input[type=number],input[type=date]{
+  padding:8px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg);
+  color:var(--text); font-size:0.9rem; width:100%;
+}
+label{font-size:0.78rem; color:var(--muted); display:block; margin-bottom:4px;}
+.field{margin-bottom:10px;}
+button.btn{
+  background:var(--accent); color:#fff; border:none; border-radius:9px; padding:10px 16px;
+  font-size:0.88rem; cursor:pointer; font-weight:600;
+}
+button.btn.secondary{background:var(--bg); color:var(--text); border:1px solid var(--border);}
+button.btn.danger{background:var(--red); color:#fff;}
+button.btn:disabled{opacity:0.5; cursor:not-allowed;}
+.row-actions{display:flex; gap:6px;}
+.row-actions button{
+  border:1px solid var(--border); background:var(--bg); color:var(--text); border-radius:6px;
+  padding:4px 8px; font-size:0.75rem; cursor:pointer;
+}
+.pill{
+  display:inline-block; padding:2px 9px; border-radius:12px; font-size:0.72rem; font-weight:600;
+}
+.pill.gasto{background:var(--red-soft); color:var(--red);}
+.pill.ingreso{background:var(--green-soft); color:var(--green);}
+.tag-cat{
+  display:flex; align-items:center; justify-content:space-between; padding:8px 10px;
+  border:1px solid var(--border); border-radius:9px; margin-bottom:8px; flex-wrap:wrap; gap:8px;
+}
+.sub-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
+.sub-chip{
+  background:var(--bg); border:1px solid var(--border); border-radius:14px; padding:3px 10px;
+  font-size:0.75rem; display:flex; align-items:center; gap:6px;
+}
+.sub-chip button{border:none; background:none; color:var(--muted); cursor:pointer; font-size:0.85rem;}
+.empty{text-align:center; color:var(--muted); padding:24px 12px; font-size:0.9rem;}
+.upload-drop{
+  border:2px dashed var(--border); border-radius:14px; padding:30px 16px; text-align:center;
+  cursor:pointer; color:var(--muted);
+}
+.upload-drop:hover{border-color:var(--accent); color:var(--accent);}
+.hidden{display:none !important;}
+.pending-item{border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px;}
+.pending-item .desc{font-weight:600; font-size:0.9rem; margin-bottom:2px;}
+.pending-item .meta{font-size:0.78rem; color:var(--muted); margin-bottom:8px;}
+.inline-form{display:flex; gap:6px; flex-wrap:wrap;}
+.inline-form > div{flex:1; min-width:120px;}
+.toast{
+  position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--text);
+  color:var(--bg); padding:10px 18px; border-radius:20px; font-size:0.85rem; z-index:100;
+  opacity:0; transition:opacity .3s; pointer-events:none;
+}
+.toast.show{opacity:1;}
+.footer-note{text-align:center; color:var(--muted); font-size:0.75rem; margin-top:20px;}
+canvas{max-height:260px;}
+
+  .search-panel{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end;margin-top:12px;}
+  .search-panel .field{margin:0;}
+  .search-wide{grid-column:span 2;}
+  @media(max-width:600px){.search-wide{grid-column:span 1;}}
+</style>
+
+<style>
+.d-spinner{display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;line-height:1;animation:d-spin .8s linear infinite;transform-origin:center;}
+@keyframes d-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="authGate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div class="card" style="width:min(420px,100%);">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:2.2rem;">💰</div>
+      <h2 style="margin:8px 0 4px;">Mi Asistente Financiero</h2>
+      <p style="color:var(--muted);margin:0;">Inicia sesión para acceder a tus finanzas.</p>
+    </div>
+    <label>Correo electrónico</label>
+    <input id="loginEmail" type="email" autocomplete="email" placeholder="tu@email.com">
+    <label style="margin-top:12px;">Contraseña</label>
+    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••">
+    <button class="btn" id="loginBtn" style="width:100%;margin-top:16px;">🔐 Iniciar sesión</button>
+    <div id="loginMsg" style="margin-top:12px;color:var(--muted);font-size:.85rem;text-align:center;"></div>
+  </div>
+</div>
+
+<header>
+  <h1>💰 Mi Asistente Financiero</h1>
+  <p id="headerSub">Presupuesto, gastos e ingresos en un solo lugar</p>
+  <button id="logoutBtn" class="btn secondary" style="margin-top:10px;padding:6px 12px;font-size:.78rem;display:none;">Cerrar sesión</button>
+</header>
+
+<nav id="tabNav"></nav>
+
+<main id="app"></main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= SEED DATA ================= */
+const SEED_TAXONOMY = [{"tipo": "Gasto", "categoria": "Auto", "subcategorias": ["Cuota mensual auto"]}, {"tipo": "Gasto", "categoria": "Ayuda", "subcategorias": []}, {"tipo": "Gasto", "categoria": "Barbería/peluquería", "subcategorias": []}, {"tipo": "Gasto", "categoria": "Comida", "subcategorias": ["Almuerzo", "Bebidas", "Cena", "Comidas afuera", "Desayuno"]}, {"tipo": "Gasto", "categoria": "Deudas", "subcategorias": ["Auto"]}, {"tipo": "Gasto", "categoria": "Educación", "subcategorias": ["Estudios"]}, {"tipo": "Gasto", "categoria": "Entretenimiento", "subcategorias": ["Compañerismo"]}, {"tipo": "Gasto", "categoria": "Higiene", "subcategorias": []}, {"tipo": "Gasto", "categoria": "Iglesia", "subcategorias": ["Diezmo", "Ofrenda"]}, {"tipo": "Gasto", "categoria": "Otros", "subcategorias": []}, {"tipo": "Gasto", "categoria": "Salud", "subcategorias": ["Hospital", "Medicina", "Salud"]}, {"tipo": "Gasto", "categoria": "Servicios", "subcategorias": ["Internet personal", "Luz", "Suscripciones"]}, {"tipo": "Gasto", "categoria": "Transporte", "subcategorias": ["Micro", "Mototaxi", "Taxi"]}, {"tipo": "Gasto", "categoria": "Vestimenta", "subcategorias": ["Zapatos"]}, {"tipo": "Gasto", "categoria": "Vivienda", "subcategorias": ["Alquiler"]}, {"tipo": "Ingreso", "categoria": "Dinero Extra", "subcategorias": []}, {"tipo": "Ingreso", "categoria": "Otros", "subcategorias": []}, {"tipo": "Ingreso", "categoria": "Salario", "subcategorias": ["Sueldo Pasivo", "Sueldo SELLOS"]}, {"tipo": "Gasto", "categoria": "Banco", "subcategorias": ["Comisiones", "Impuestos", "ITF"]}, {"tipo": "Ingreso", "categoria": "Banco", "subcategorias": ["Intereses"]}];
+const SEED_RULES = [{"keyword": "vidrio", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "templado", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "iphone", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "comida", "categoria": "Comida", "subcategoria": "Almuerzo", "tipo": "Gasto"}, {"keyword": "china", "categoria": "Comida", "subcategoria": "Almuerzo", "tipo": "Gasto"}, {"keyword": "uber", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "iglesia", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "mairaneño", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "dinero", "categoria": "Servicios", "subcategoria": "Internet personal", "tipo": "Gasto"}, {"keyword": "perder", "categoria": "Servicios", "subcategoria": "Internet personal", "tipo": "Gasto"}, {"keyword": "línea", "categoria": "Servicios", "subcategoria": "Internet personal", "tipo": "Gasto"}, {"keyword": "desayuno", "categoria": "Comida", "subcategoria": "Desayuno", "tipo": "Gasto"}, {"keyword": "jibas", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "reunirme", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "anita", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "diezmo", "categoria": "Iglesia", "subcategoria": "Diezmo", "tipo": "Gasto"}, {"keyword": "almuerzo", "categoria": "Comida", "subcategoria": "Almuerzo", "tipo": "Gasto"}, {"keyword": "frente", "categoria": "Comida", "subcategoria": "Almuerzo", "tipo": "Gasto"}, {"keyword": "casa", "categoria": "Comida", "subcategoria": "Almuerzo", "tipo": "Gasto"}, {"keyword": "trámites", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "legales", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "auto", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "palacio", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "justicia", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "churrasco", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "grupo", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "jóvenes", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "baygon", "categoria": "Higiene", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "limpiador", "categoria": "Higiene", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "superficies", "categoria": "Higiene", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "pollo", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "campeón", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "suero", "categoria": "Salud", "subcategoria": "Hospital", "tipo": "Gasto"}, {"keyword": "papel", "categoria": "Salud", "subcategoria": "Hospital", "tipo": "Gasto"}, {"keyword": "compra", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "billetera", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "exportabol", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "meses", "categoria": "Servicios", "subcategoria": "Luz", "tipo": "Gasto"}, {"keyword": "cuota", "categoria": "Auto", "subcategoria": "Cuota mensual auto", "tipo": "Gasto"}, {"keyword": "julio", "categoria": "Auto", "subcategoria": "Cuota mensual auto", "tipo": "Gasto"}, {"keyword": "pago", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "deuda", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "café", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "colocho", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "ateneo", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "apple", "categoria": "Servicios", "subcategoria": "Suscripciones", "tipo": "Gasto"}, {"keyword": "activación", "categoria": "Servicios", "subcategoria": "Internet personal", "tipo": "Gasto"}, {"keyword": "entel", "categoria": "Servicios", "subcategoria": "Internet personal", "tipo": "Gasto"}, {"keyword": "helados", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "peluquero", "categoria": "Barbería/peluquería", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "vuelta", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "cine", "categoria": "Entretenimiento", "subcategoria": "Compañerismo", "tipo": "Gasto"}, {"keyword": "chicos", "categoria": "Entretenimiento", "subcategoria": "Compañerismo", "tipo": "Gasto"}, {"keyword": "compras", "categoria": "Comida", "subcategoria": "Desayuno", "tipo": "Gasto"}, {"keyword": "cena", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "jasmin", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "cofi", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "yango", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "antibióticos", "categoria": "Salud", "subcategoria": "Medicina", "tipo": "Gasto"}, {"keyword": "jarabe", "categoria": "Salud", "subcategoria": "Medicina", "tipo": "Gasto"}, {"keyword": "soda", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "delivery", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "pollos", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "regalo", "categoria": "Dinero Extra", "subcategoria": null, "tipo": "Ingreso"}, {"keyword": "mamá", "categoria": "Dinero Extra", "subcategoria": null, "tipo": "Ingreso"}, {"keyword": "ofrenda", "categoria": "Iglesia", "subcategoria": "Ofrenda", "tipo": "Gasto"}, {"keyword": "mariana", "categoria": "Iglesia", "subcategoria": "Ofrenda", "tipo": "Gasto"}, {"keyword": "boxer", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "jaboncillo", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "abasto", "categoria": "Transporte", "subcategoria": "Mototaxi", "tipo": "Gasto"}, {"keyword": "zapatos", "categoria": "Vestimenta", "subcategoria": "Zapatos", "tipo": "Gasto"}, {"keyword": "viaje", "categoria": "Vestimenta", "subcategoria": "Zapatos", "tipo": "Gasto"}, {"keyword": "santa", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "maría", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "sipi", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "buzos", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "plaza", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "lavado", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "vino", "categoria": "Comida", "subcategoria": "Bebidas", "tipo": "Gasto"}, {"keyword": "brasargent", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "desde", "categoria": "Transporte", "subcategoria": "Mototaxi", "tipo": "Gasto"}, {"keyword": "paula", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "papá", "categoria": "Ayuda", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "devolución", "categoria": "Otros", "subcategoria": null, "tipo": "Ingreso"}, {"keyword": "inyección", "categoria": "Salud", "subcategoria": "Medicina", "tipo": "Gasto"}, {"keyword": "gotas", "categoria": "Salud", "subcategoria": "Medicina", "tipo": "Gasto"}, {"keyword": "ojos", "categoria": "Salud", "subcategoria": "Medicina", "tipo": "Gasto"}, {"keyword": "arreglo", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "desodorante", "categoria": "Higiene", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "bolsas", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "negra", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "blanca", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "envío", "categoria": "Transporte", "subcategoria": "Mototaxi", "tipo": "Gasto"}, {"keyword": "lavandería", "categoria": "Transporte", "subcategoria": "Mototaxi", "tipo": "Gasto"}, {"keyword": "cuadre", "categoria": "Otros", "subcategoria": null, "tipo": "Ingreso"}, {"keyword": "gastos", "categoria": "Otros", "subcategoria": null, "tipo": "Ingreso"}, {"keyword": "cuñape", "categoria": "Comida", "subcategoria": "Desayuno", "tipo": "Gasto"}, {"keyword": "empanada", "categoria": "Comida", "subcategoria": "Desayuno", "tipo": "Gasto"}, {"keyword": "açãi", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "barrio", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "pedidosya", "categoria": "Servicios", "subcategoria": "Suscripciones", "tipo": "Gasto"}, {"keyword": "plus", "categoria": "Servicios", "subcategoria": "Suscripciones", "tipo": "Gasto"}, {"keyword": "limpieza", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "parrilla", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "bolsa", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "sueldo", "categoria": "Iglesia", "subcategoria": "Diezmo", "tipo": "Gasto"}, {"keyword": "sellos", "categoria": "Iglesia", "subcategoria": "Diezmo", "tipo": "Gasto"}, {"keyword": "cumple", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "carlita", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "seguro", "categoria": "Servicios", "subcategoria": "Suscripciones", "tipo": "Gasto"}, {"keyword": "banco", "categoria": "Servicios", "subcategoria": "Suscripciones", "tipo": "Gasto"}, {"keyword": "devoluciones", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "alejandro", "categoria": "Otros", "subcategoria": null, "tipo": "Gasto"}, {"keyword": "pizza", "categoria": "Dinero Extra", "subcategoria": null, "tipo": "Ingreso"}, {"keyword": "jiba", "categoria": "Comida", "subcategoria": "Cena", "tipo": "Gasto"}, {"keyword": "fisioterapia", "categoria": "Salud", "subcategoria": "Salud", "tipo": "Gasto"}, {"keyword": "ernesto", "categoria": "Iglesia", "subcategoria": "Ofrenda", "tipo": "Gasto"}, {"keyword": "reunión", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "carli", "categoria": "Transporte", "subcategoria": "Taxi", "tipo": "Gasto"}, {"keyword": "panchitos", "categoria": "Comida", "subcategoria": "Comidas afuera", "tipo": "Gasto"}, {"keyword": "retencion", "categoria": "Banco", "subcategoria": "Impuestos", "tipo": "Gasto"}, {"keyword": "interes", "categoria": "Banco", "subcategoria": "Intereses", "tipo": "Ingreso"}];
+const SEED_TX = [{"fecha": "2026-08-17", "descripcion": "Vidrio templado iPhone", "monto": 60.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-17", "descripcion": "Transporte", "monto": 12.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-08-17", "descripcion": "Comida", "monto": 40.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-08-16", "descripcion": "Comida china", "monto": 61.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Almuerzo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-16", "descripcion": "Uber a iglesia", "monto": 35.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-16", "descripcion": "Mairaneño", "monto": 46.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-15", "descripcion": "Dinero para no perder línea Tigo", "monto": 10.0, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Internet personal", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-15", "descripcion": "Desayuno", "monto": 21.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Desayuno", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-15", "descripcion": "Salario", "monto": 1500.0, "tipo": "Ingreso", "categoria": "Salario", "subcategoria": "Sueldo SELLOS", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-15", "descripcion": "Jibas", "monto": 35.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-08-15", "descripcion": "Uber a reunirme con Anita para ir a reu jóvenes", "monto": 31.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-14", "descripcion": "Diezmo", "monto": 582.25, "tipo": "Gasto", "categoria": "Iglesia", "subcategoria": "Diezmo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-14", "descripcion": "Almuerzo al frente casa", "monto": 25.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Almuerzo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-14", "descripcion": "Trámites legales auto", "monto": 870.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-14", "descripcion": "Uber a palacio de justicia", "monto": 23.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-13", "descripcion": "Churrasco grupo de jóvenes", "monto": 30.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-13", "descripcion": "Baygon, limpiador de superficies, suavizante de ropa", "monto": 81.5, "tipo": "Gasto", "categoria": "Higiene", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-13", "descripcion": "Pollo campeón", "monto": 66.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-13", "descripcion": "Suero y papel", "monto": 179.0, "tipo": "Gasto", "categoria": "Salud", "subcategoria": "Hospital", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-12", "descripcion": "Compra de billetera (Exportabol)", "monto": 116.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-12", "descripcion": "Dos meses", "monto": 89.2, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Luz", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-12", "descripcion": "Cuota mes julio", "monto": 1000.0, "tipo": "Gasto", "categoria": "Auto", "subcategoria": "Cuota mensual auto", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-12", "descripcion": "Pago deuda Anita excedente viaje", "monto": 750.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-11", "descripcion": "Café con colocho - ateneo", "monto": 45.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-11", "descripcion": "Salario", "monto": 4322.53, "tipo": "Ingreso", "categoria": "Salario", "subcategoria": "Sueldo Pasivo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-10", "descripcion": "Comida", "monto": 35.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-10", "descripcion": "Apple one", "monto": 41.0, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Suscripciones", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-09", "descripcion": "Activación línea Entel", "monto": 10.0, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Internet personal", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-08", "descripcion": "Helados", "monto": 20.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-08", "descripcion": "Peluquero", "monto": 35.0, "tipo": "Gasto", "categoria": "Barbería/peluquería", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-08", "descripcion": "Uber de vuelta a casa", "monto": 37.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-08", "descripcion": "Uber", "monto": 43.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-08", "descripcion": "Cine con Anita y chicos", "monto": 164.16, "tipo": "Gasto", "categoria": "Entretenimiento", "subcategoria": "Compañerismo", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-07", "descripcion": "Compras desayuno", "monto": 47.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Desayuno", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-07", "descripcion": "Cena con Jasmin y Leo", "monto": 77.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-07", "descripcion": "Cofi con Anita y Colocho", "monto": 42.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-08-06", "descripcion": "YANGO a casa", "monto": 38.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-06", "descripcion": "YANGO a iglesia", "monto": 46.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-06", "descripcion": "Antibióticos y jarabe", "monto": 122.84, "tipo": "Gasto", "categoria": "Salud", "subcategoria": "Medicina", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-05", "descripcion": "Soda + delivery", "monto": 25.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-05", "descripcion": "Pollos Mairaneño", "monto": 29.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-08-05", "descripcion": "Vivienda", "monto": 1200.0, "tipo": "Gasto", "categoria": "Vivienda", "subcategoria": "Alquiler", "cuenta": "Banco Económico", "origen": "historico"}, {"fecha": "2026-07-15", "descripcion": "Regalo mamá", "monto": 500.0, "tipo": "Ingreso", "categoria": "Dinero Extra", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-15", "descripcion": "Ofrenda a Mariana T", "monto": 33.0, "tipo": "Gasto", "categoria": "Iglesia", "subcategoria": "Ofrenda", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-15", "descripcion": "Boxer + jaboncillo", "monto": 210.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-15", "descripcion": "Transporte", "monto": 6.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-15", "descripcion": "Al abasto", "monto": 10.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Mototaxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-15", "descripcion": "Zapatos viaje", "monto": 380.0, "tipo": "Gasto", "categoria": "Vestimenta", "subcategoria": "Zapatos", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-14", "descripcion": "Transporte", "monto": 6.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-14", "descripcion": "Santa María", "monto": 56.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-13", "descripcion": "Sipi", "monto": 21.5, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-13", "descripcion": "Transporte", "monto": 9.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-13", "descripcion": "Buzos", "monto": 145.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-13", "descripcion": "Café plaza", "monto": 7.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-13", "descripcion": "Transporte", "monto": 12.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Mototaxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-12", "descripcion": "Lavado de zapatos", "monto": 50.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-12", "descripcion": "H21", "monto": 36.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Desayuno", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-12", "descripcion": "Vino", "monto": 53.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-12", "descripcion": "Regalo mamá", "monto": 300.0, "tipo": "Ingreso", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-12", "descripcion": "Brasargent", "monto": 56.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-12", "descripcion": "YANGO a casa desde donde maddy", "monto": 13.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Mototaxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-11", "descripcion": "A casa Paula", "monto": 24.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-11", "descripcion": "Dinero a papá", "monto": 40.0, "tipo": "Gasto", "categoria": "Ayuda", "subcategoria": null, "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-11", "descripcion": "Cofi", "monto": 18.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Desayuno", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-11", "descripcion": "Ida a cofi", "monto": 3.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-11", "descripcion": "Transporte", "monto": 51.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-11", "descripcion": "Comida", "monto": 64.5, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Devolución deuda Anita por Mairaneño", "monto": 32.0, "tipo": "Ingreso", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Transporte", "monto": 12.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Inyección y gotas para ojos", "monto": 197.2, "tipo": "Gasto", "categoria": "Salud", "subcategoria": "Medicina", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Peluquero", "monto": 20.0, "tipo": "Gasto", "categoria": "Barbería/peluquería", "subcategoria": null, "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Arreglo zapatos", "monto": 50.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Desodorante", "monto": 28.0, "tipo": "Gasto", "categoria": "Higiene", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Bolsas negra y blanca", "monto": 27.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Diezmo", "monto": 432.25, "tipo": "Gasto", "categoria": "Iglesia", "subcategoria": "Diezmo", "cuenta": "Cuenta Ganadero", "origen": "historico"}, {"fecha": "2026-07-10", "descripcion": "Envío de zapatos a lavandería", "monto": 11.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Mototaxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-09", "descripcion": "Mairaneño", "monto": 63.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-09", "descripcion": "Cuadre con gastos mamá", "monto": 200.0, "tipo": "Ingreso", "categoria": "Otros", "subcategoria": null, "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-09", "descripcion": "Campeón", "monto": 96.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Almuerzo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-09", "descripcion": "Cuñape y empanada", "monto": 13.5, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Desayuno", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-09", "descripcion": "Transporte", "monto": 9.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-09", "descripcion": "Apple one", "monto": 34.5, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Suscripciones", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-08", "descripcion": "Açãi de barrio", "monto": 69.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-08", "descripcion": "PedidosYa plus", "monto": 35.0, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Suscripciones", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-08", "descripcion": "Pago limpieza parrilla (iglesia)", "monto": 12.5, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-08", "descripcion": "Comida", "monto": 51.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-08", "descripcion": "Transporte", "monto": 6.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-07", "descripcion": "Deudas", "monto": 1000.0, "tipo": "Gasto", "categoria": "Deudas", "subcategoria": "Auto", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-07", "descripcion": "Vivienda", "monto": 1200.0, "tipo": "Gasto", "categoria": "Vivienda", "subcategoria": "Alquiler", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-07", "descripcion": "Salario", "monto": 4322.53, "tipo": "Ingreso", "categoria": "Salario", "subcategoria": "Sueldo Pasivo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-07", "descripcion": "Bolsa para envío", "monto": 3.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-07", "descripcion": "Comida", "monto": 78.5, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-07", "descripcion": "Transporte", "monto": 9.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-06", "descripcion": "Pan y café", "monto": 60.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Desayuno", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-06", "descripcion": "Comida", "monto": 15.5, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-06", "descripcion": "Transporte", "monto": 21.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-06", "descripcion": "Sueldo Sellos", "monto": 300.0, "tipo": "Gasto", "categoria": "Iglesia", "subcategoria": "Diezmo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-05", "descripcion": "Cumple Carlita", "monto": 41.5, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-05", "descripcion": "Churrasco", "monto": 59.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Almuerzo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-05", "descripcion": "Comida", "monto": 25.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Desayuno", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-05", "descripcion": "Transporte", "monto": 9.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-04", "descripcion": "Seguro del banco", "monto": 19.0, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Suscripciones", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-04", "descripcion": "Cofi", "monto": 18.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-04", "descripcion": "Almuerzo con mamá", "monto": 82.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Almuerzo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-04", "descripcion": "Devoluciones deuda a Alejandro", "monto": 39.0, "tipo": "Gasto", "categoria": "Otros", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-04", "descripcion": "Educación", "monto": 100.0, "tipo": "Gasto", "categoria": "Educación", "subcategoria": "Estudios", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-03", "descripcion": "Yango", "monto": 25.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-03", "descripcion": "Pizza + regalo mamá", "monto": 100.0, "tipo": "Ingreso", "categoria": "Dinero Extra", "subcategoria": null, "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-03", "descripcion": "Pizza", "monto": 62.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-03", "descripcion": "Jiba", "monto": 50.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Cena", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-03", "descripcion": "Fisioterapia", "monto": 170.0, "tipo": "Gasto", "categoria": "Salud", "subcategoria": "Salud", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-02", "descripcion": "Transporte", "monto": 9.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Micro", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-02", "descripcion": "Transporte", "monto": 24.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-02", "descripcion": "Yango a Fisioterapia", "monto": 37.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-02", "descripcion": "20$ a Ernesto", "monto": 196.95, "tipo": "Gasto", "categoria": "Iglesia", "subcategoria": "Ofrenda", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-01", "descripcion": "Servicios", "monto": 137.22, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Suscripciones", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-01", "descripcion": "Servicios", "monto": 102.8, "tipo": "Gasto", "categoria": "Servicios", "subcategoria": "Luz", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-01", "descripcion": "Salario", "monto": 3000.0, "tipo": "Ingreso", "categoria": "Salario", "subcategoria": "Sueldo Pasivo", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-01", "descripcion": "Reunión Carli a casa", "monto": 24.0, "tipo": "Gasto", "categoria": "Transporte", "subcategoria": "Taxi", "cuenta": "Dinero en efectivo", "origen": "historico"}, {"fecha": "2026-07-01", "descripcion": "Cofi", "monto": 13.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Bebidas", "cuenta": "BNB", "origen": "historico"}, {"fecha": "2026-07-01", "descripcion": "Panchitos", "monto": 22.0, "tipo": "Gasto", "categoria": "Comida", "subcategoria": "Comidas afuera", "cuenta": "BNB", "origen": "historico"}];
+
+/* ================= STORAGE / SUPABASE ================= */
+const STORE_KEY = 'jf_data_v2';
+const SUPABASE_URL = 'https://femwcgsptumpmwjqnhxp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_781kJpE3AFS1aBz6VYLDFg_HxHS38d_';
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser = null;
+let cloudActive = false;
+const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+let cloudSnapshot = null;
+
+function migrateState(s){
+  (s.categories||[]).forEach(c=>{
+    if(!c.subPresupuestos) c.subPresupuestos = {};
+    if(typeof c.presupuesto !== 'number') c.presupuesto = 0;
+  });
+}
+function categoryBudget(c){
+  if(c.subcategorias && c.subcategorias.length>0){
+    const subs=c.subPresupuestos||{};
+    return c.subcategorias.reduce((sum,name)=>sum+(Number(subs[name])||0),0);
+  }
+  return Number(c.presupuesto)||0;
+}
+function buildSeedState(){
+  const categories=SEED_TAXONOMY.map(t=>({id:crypto.randomUUID(),tipo:t.tipo,nombre:t.categoria,subcategorias:t.subcategorias.slice(),presupuesto:0,subPresupuestos:{}}));
+  const catMap=new Map(categories.map(c=>[c.tipo+'|'+c.nombre,c]));
+  const subMap=new Map();
+  categories.forEach(c=>c.subcategorias.forEach(name=>subMap.set(c.id+'|'+name,crypto.randomUUID())));
+  const rules=SEED_RULES.map(r=>({id:crypto.randomUUID(),keyword:r.keyword,tipo:r.tipo,categoria:r.categoria,subcategoria:r.subcategoria}));
+  const transactions=SEED_TX.map(t=>({id:crypto.randomUUID(),fecha:t.fecha,descripcion:t.descripcion,monto:t.monto,tipo:t.tipo,categoria:t.categoria,subcategoria:t.subcategoria,cuenta:t.cuenta,origen:t.origen,estado:'categorizado',refId:null}));
+  return {categories,rules,transactions,seeded:true,seedImported:true};
+}
+
+let state=null;
+
+function saveLocal(){ localStorage.setItem(STORE_KEY,JSON.stringify(state)); }
+function loadLocal(){
+  try{const raw=localStorage.getItem(STORE_KEY); if(raw){const x=JSON.parse(raw); migrateState(x); return x;}}catch(e){}
+  return null;
+}
+
+async function loadFromSupabase(){
+  const [{data:cats,error:e1},{data:subs,error:e2},{data:rules,error:e3},{data:tx,error:e4},{data:budgets,error:e5}]=await Promise.all([
+    supabaseClient.from('categorias').select('*').order('created_at'),
+    supabaseClient.from('subcategorias').select('*').order('created_at'),
+    supabaseClient.from('reglas_categorizacion').select('*').order('created_at'),
+    supabaseClient.from('transacciones').select('*').order('fecha',{ascending:false}),
+    supabaseClient.from('presupuestos').select('*').eq('mes',currentMonth+'-01')
+  ]);
+  const err=[e1,e2,e3,e4,e5].find(Boolean);
+  if(err) throw err;
+  if(!cats || cats.length===0) return null;
+  const subByCat={}; (subs||[]).forEach(s=>(subByCat[s.categoria_id]??=[]).push(s));
+  const budgetByCat={}; (budgets||[]).forEach(b=>{
+    if(!budgetByCat[b.categoria_id]) budgetByCat[b.categoria_id]={direct:0,subs:{}};
+    if(b.subcategoria_id){
+      const sub=(subs||[]).find(x=>x.id===b.subcategoria_id); if(sub) budgetByCat[b.categoria_id].subs[sub.nombre]=Number(b.monto)||0;
+    } else budgetByCat[b.categoria_id].direct=Number(b.monto)||0;
+  });
+  const categories=cats.map(c=>({id:c.id,tipo:c.tipo,nombre:c.nombre,subcategorias:(subByCat[c.id]||[]).map(s=>s.nombre),presupuesto:budgetByCat[c.id]?.direct||0,subPresupuestos:budgetByCat[c.id]?.subs||{}}));
+  const catById=Object.fromEntries(categories.map(c=>[c.id,c]));
+  const subNameById=Object.fromEntries((subs||[]).map(s=>[s.id,s.nombre]));
+  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null}));
+  const rules2=(rules||[]).map(r=>({id:r.id,keyword:r.palabra_clave,tipo:r.categoria_id&&catById[r.categoria_id]?catById[r.categoria_id].tipo:'Gasto',categoria:catById[r.categoria_id]?.nombre||'',subcategoria:r.subcategoria_id?subNameById[r.subcategoria_id]||null:null}));
+  return {categories,rules:rules2,transactions,seeded:false,seedImported:true};
+}
+
+async function seedToSupabase(seed){
+  const user_id=currentUser.id;
+  // La base usa UUIDs; nunca enviamos los IDs internos tipo "cat_0"/"tx_seed_0".
+  const catIdByKey={};
+  const cats=seed.categories.map(c=>{
+    const id=crypto.randomUUID();
+    catIdByKey[c.tipo+'|'+c.nombre]=id;
+    return {id,usuario_id:user_id,nombre:c.nombre,tipo:c.tipo};
+  });
+  let r=await supabaseClient.from('categorias').insert(cats);
+  if(r.error) throw new Error('categorias: '+r.error.message);
+
+  const subIdByCatName={};
+  const subRows=[];
+  seed.categories.forEach(c=>{
+    const catId=catIdByKey[c.tipo+'|'+c.nombre];
+    (c.subcategorias||[]).forEach(name=>{
+      const id=crypto.randomUUID();
+      subIdByCatName[catId+'|'+name]=id;
+      subRows.push({id,usuario_id:user_id,categoria_id:catId,nombre:name});
+    });
+  });
+  if(subRows.length){
+    r=await supabaseClient.from('subcategorias').insert(subRows);
+    if(r.error) throw new Error('subcategorias: '+r.error.message);
+  }
+
+  const ruleRows=(seed.rules||[]).map(x=>({
+    id:crypto.randomUUID(), usuario_id:user_id, palabra_clave:x.keyword,
+    categoria_id:catIdByKey[x.tipo+'|'+x.categoria]||null,
+    subcategoria_id:x.subcategoria ? (subIdByCatName[catIdByKey[x.tipo+'|'+x.categoria]+'|'+x.subcategoria]||null) : null
+  }));
+  if(ruleRows.length){
+    r=await supabaseClient.from('reglas_categorizacion').insert(ruleRows);
+    if(r.error) throw new Error('reglas: '+r.error.message);
+  }
+
+  const txRows=(seed.transactions||[]).map(t=>({
+    id:crypto.randomUUID(), usuario_id:user_id, fecha:t.fecha, descripcion:t.descripcion,
+    monto:Number(t.monto)||0, tipo:t.tipo,
+    categoria_id:catIdByKey[t.tipo+'|'+t.categoria]||null,
+    subcategoria_id:t.subcategoria ? (subIdByCatName[(catIdByKey[t.tipo+'|'+t.categoria]||'')+'|'+t.subcategoria]||null) : null,
+    cuenta:t.cuenta||null, origen:t.origen||null, estado:t.estado||'categorizado',
+    referencia_id:t.refId||null, metadata:{}
+  }));
+  if(txRows.length){
+    r=await supabaseClient.from('transacciones').insert(txRows);
+    if(r.error) throw new Error('transacciones: '+r.error.message);
+  }
+  return seed;
+}
+async function auditSupabaseConnection(){
+  if(!currentUser) throw new Error('No hay una sesión de Supabase activa.');
+  const {data,error}=await supabaseClient.from('categorias').select('id').eq('usuario_id',currentUser.id).limit(1);
+  if(error) throw new Error('Lectura Supabase falló: '+error.message);
+  return true;
+}
+
+async function saveState(){
+  // Guardado local inmediato. La nube recibe SOLO los registros que cambiaron.
+  saveLocal();
+  if(!currentUser) return {cloud:false};
+
+  const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+
+  try{
+    const user_id=currentUser.id;
+
+    // --- Categorías y subcategorías ---
+    const {data:existingCats,error:eCats}=await supabaseClient
+      .from('categorias').select('id,tipo,nombre').eq('usuario_id',user_id);
+    if(eCats) throw eCats;
+
+    const catByKey=Object.fromEntries((existingCats||[]).map(c=>[c.tipo+'|'+c.nombre,c.id]));
+    const catRows=[];
+    for(const c of state.categories){
+      const key=c.tipo+'|'+c.nombre;
+      const id=catByKey[key] || (UUID_RE.test(c.id||'') ? c.id : crypto.randomUUID());
+      c.id=id;
+      catByKey[key]=id;
+      catRows.push({id,usuario_id:user_id,nombre:c.nombre,tipo:c.tipo});
+    }
+    if(catRows.length){
+      const r=await supabaseClient.from('categorias').upsert(catRows,{onConflict:'id'});
+      if(r.error) throw r.error;
+    }
+
+    const {data:existingSubs,error:eSubs}=await supabaseClient
+      .from('subcategorias').select('id,categoria_id,nombre').eq('usuario_id',user_id);
+    if(eSubs) throw eSubs;
+
+    const subMap={};
+    const existingSubMap=Object.fromEntries(
+      (existingSubs||[]).map(x=>[x.categoria_id+'|'+x.nombre,x.id])
+    );
+    const subRows=[];
+    state.categories.forEach(c=>{
+      const catId=catByKey[c.tipo+'|'+c.nombre];
+      (c.subcategorias||[]).forEach(name=>{
+        const key=catId+'|'+name;
+        const id=existingSubMap[key] || crypto.randomUUID();
+        subMap[key]=id;
+        if(!existingSubMap[key]) existingSubMap[key]=id;
+        subRows.push({id,usuario_id:user_id,categoria_id:catId,nombre:name});
+      });
+    });
+    if(subRows.length){
+      const r=await supabaseClient.from('subcategorias').upsert(subRows,{onConflict:'id'});
+      if(r.error) throw r.error;
+    }
+
+    // --- Reglas: solo insertamos reglas nuevas. No reconstruimos las 122 existentes. ---
+    const existingRuleIds=new Set((cloudSnapshot?.rules||[]).map(r=>r.id));
+    const newRuleRows=[];
+    (state.rules||[]).forEach(x=>{
+      if(UUID_RE.test(x.id||'') && existingRuleIds.has(x.id)) return;
+      const id=UUID_RE.test(x.id||'') ? x.id : crypto.randomUUID();
+      x.id=id;
+      newRuleRows.push({
+        id,usuario_id:user_id,palabra_clave:x.keyword,
+        categoria_id:catByKey[x.tipo+'|'+x.categoria]||null,
+        subcategoria_id:x.subcategoria
+          ? (subMap[(catByKey[x.tipo+'|'+x.categoria]||'')+'|'+x.subcategoria]||null)
+          : null
+      });
+    });
+    if(newRuleRows.length){
+      const r=await supabaseClient.from('reglas_categorizacion').upsert(newRuleRows,{onConflict:'id'});
+      if(r.error) throw r.error;
+    }
+
+    // --- Transacciones: SOLO nuevas o modificadas ---
+    const previousTx=cloudSnapshot?.transactions||[];
+    const previousById=Object.fromEntries(previousTx.map(t=>[t.id,t]));
+    const txRows=[];
+    const currentIds=new Set();
+
+    for(const tx of (state.transactions||[])){
+      let id=tx.id;
+      if(!UUID_RE.test(id||'')){
+        id=crypto.randomUUID();
+        tx.id=id;
+      }
+      currentIds.add(id);
+
+      const row={
+        id,usuario_id:user_id,fecha:tx.fecha,descripcion:tx.descripcion,
+        monto:Number(tx.monto)||0,tipo:tx.tipo,
+        categoria_id:catByKey[tx.tipo+'|'+tx.categoria]||null,
+        subcategoria_id:tx.subcategoria
+          ? (subMap[(catByKey[tx.tipo+'|'+tx.categoria]||'')+'|'+tx.subcategoria]||null)
+          : null,
+        cuenta:tx.cuenta||null,origen:tx.origen||null,
+        estado:tx.estado||'categorizado',
+        referencia_id:tx.refId||null,metadata:{}
+      };
+      const old=previousById[id];
+      if(!old || !same(
+        {fecha:old.fecha,descripcion:old.descripcion,monto:Number(old.monto)||0,tipo:old.tipo,
+         categoria:old.categoria,subcategoria:old.subcategoria,cuenta:old.cuenta,origen:old.origen,
+         estado:old.estado,refId:old.refId||null},
+        {fecha:tx.fecha,descripcion:tx.descripcion,monto:Number(tx.monto)||0,tipo:tx.tipo,
+         categoria:tx.categoria,subcategoria:tx.subcategoria,cuenta:tx.cuenta,origen:tx.origen,
+         estado:tx.estado,refId:tx.refId||null}
+      )){
+        txRows.push(row);
+      }
+    }
+
+    if(txRows.length){
+      const r=await supabaseClient.from('transacciones').upsert(txRows,{onConflict:'id'});
+      if(r.error) throw r.error;
+    }
+
+    // Si ya tenemos una foto fiable de la nube, eliminamos SOLO transacciones
+    // que el usuario realmente haya borrado.
+    if(cloudSnapshot?.transactions){
+      const deletedIds=previousTx.map(t=>t.id).filter(id=>!currentIds.has(id));
+      if(deletedIds.length){
+        const r=await supabaseClient.from('transacciones')
+          .delete().eq('usuario_id',user_id).in('id',deletedIds);
+        if(r.error) throw r.error;
+      }
+    }
+
+    // --- Presupuestos del mes actual ---
+    // Se sincronizan únicamente cuando cambió el contenido de presupuestos.
+    const budgetSignature=JSON.stringify((state.categories||[]).map(c=>({
+      id:c.id,p:c.presupuesto||0,s:c.subPresupuestos||{}
+    })));
+    if(budgetSignature !== cloudSnapshot?.budgetSignature){
+      const rDel=await supabaseClient.from('presupuestos')
+        .delete().eq('usuario_id',user_id).eq('mes',currentMonth+'-01');
+      if(rDel.error) throw new Error('presupuestos DELETE: '+rDel.error.message);
+
+      const budgetRows=[];
+      state.categories.forEach(c=>{
+        const catId=catByKey[c.tipo+'|'+c.nombre];
+        if(c.subcategorias?.length){
+          c.subcategorias.forEach(name=>{
+            const monto=Number(c.subPresupuestos?.[name])||0;
+            if(monto>0) budgetRows.push({
+              id:crypto.randomUUID(),usuario_id:user_id,categoria_id:catId,
+              subcategoria_id:subMap[catId+'|'+name]||null,mes:currentMonth+'-01',monto
+            });
+          });
+        }else if(Number(c.presupuesto)>0){
+          budgetRows.push({
+            id:crypto.randomUUID(),usuario_id:user_id,categoria_id:catId,
+            subcategoria_id:null,mes:currentMonth+'-01',monto:Number(c.presupuesto)
+          });
+        }
+      });
+      if(budgetRows.length){
+        const r=await supabaseClient.from('presupuestos').insert(budgetRows);
+        if(r.error) throw r.error;
+      }
+    }
+
+    // Actualizamos la foto local de nube después de confirmar todo.
+    cloudSnapshot={
+      transactions:(state.transactions||[]).map(t=>({...t})),
+      rules:(state.rules||[]).map(r=>({...r})),
+      budgetSignature
+    };
+    saveLocal();
+    cloudActive=true;
+    return {cloud:true};
+  }catch(error){
+    console.error('Error sincronizando con Supabase:',error);
+    cloudActive=false;
+    return {cloud:false,error};
+  }
+}
+
+async function initApp(){
+  const appEl=document.getElementById('app');
+  appEl.innerHTML='<div class="card"><div class="empty">☁️ Conectando con tus datos…</div></div>';
+  try{
+    // Primero intentamos cargar lo que ya existe en Supabase.
+    // Si la cuenta está vacía, NO bloqueamos la aplicación mientras
+    // se sube la información inicial.
+    const cloudData=await loadFromSupabase();
+    if(cloudData){
+      state=cloudData;
+      cloudSnapshot={
+        transactions:(state.transactions||[]).map(t=>({...t})),
+        rules:(state.rules||[]).map(r=>({...r})),
+        budgetSignature:JSON.stringify((state.categories||[]).map(c=>({id:c.id,p:c.presupuesto||0,s:c.subPresupuestos||{}})))
+      };
+      cloudActive=true;
+      saveLocal();
+      migrateState(state);
+      finishInit();
+      render();
+      return;
+    }
+
+    // Primera entrada: mostrar la aplicación inmediatamente.
+    const local=loadLocal();
+    state=local||buildSeedState();
+    migrateState(state);
+    finishInit();
+    render();
+    cloudActive=false;
+    renderNav();
+
+    // La carga inicial a Supabase ocurre en segundo plano.
+    if(!local){
+      showToast('Preparando sincronización inicial…');
+      seedToSupabase(state).then(async ()=>{
+        const fresh=await loadFromSupabase();
+        if(fresh){
+          state=fresh;
+          cloudSnapshot={
+            transactions:(state.transactions||[]).map(t=>({...t})),
+            rules:(state.rules||[]).map(r=>({...r})),
+            budgetSignature:JSON.stringify((state.categories||[]).map(c=>({id:c.id,p:c.presupuesto||0,s:c.subPresupuestos||{}})))
+          };
+          saveLocal();
+        }
+        cloudActive=true;
+        renderNav();
+        showToast('Datos iniciales sincronizados ✓');
+      }).catch(err=>{
+        console.error('Error sincronizando datos iniciales:',err);
+        cloudActive=false;
+        renderNav();
+        showToast('La app está funcionando en modo local.');
+      });
+    } else {
+      saveState().then(result=>{
+        if(result?.cloud){ cloudActive=true; renderNav(); }
+      });
+    }
+  }catch(e){
+    console.error('Error cargando datos:',e);
+    state=loadLocal()||buildSeedState();
+    migrateState(state);
+    cloudActive=false;
+    finishInit();
+    render();
+    showToast('No se pudo conectar a la nube. Usando datos locales.');
+  }
+}
+
+function uid(prefix){
+  return prefix+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8);
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3200);
+}
+
+/* ================= UTIL ================= */
+function fmtMoney(n){
+  const v = Number(n)||0;
+  return 'Bs ' + v.toLocaleString('es-BO', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function normalize(s){
+  return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+function monthKey(dateStr){ return (dateStr||'').slice(0,7); }
+function monthLabel(key){
+  const [y,m] = key.split('-').map(Number);
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  return meses[m-1]+' '+y;
+}
+function todayKey(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+function shiftMonth(key, delta){
+  let [y,m] = key.split('-').map(Number);
+  m += delta;
+  while(m>12){m-=12; y+=1;}
+  while(m<1){m+=12; y-=1;}
+  return y+'-'+String(m).padStart(2,'0');
+}
+
+function getCategory(tipo, nombre){
+  return state.categories.find(c=>c.tipo===tipo && c.nombre===nombre);
+}
+
+/* ================= APP STATE ================= */
+let currentTab = 'dashboard';
+let currentMonth = todayKey();
+
+// Runs once state (local or cloud) is ready: jumps to the most recent month with data.
+function finishInit(){
+  const months = state.transactions.map(t=>monthKey(t.fecha)).filter(Boolean).sort();
+  if(months.length && !months.includes(currentMonth)){
+    currentMonth = months[months.length-1];
+  }
+}
+
+const TABS = [
+  {id:'dashboard', label:'📊 Resumen'},
+  {id:'transacciones', label:'📄 Transacciones'},
+  {id:'pendientes', label:'❓ Pendientes'},
+  {id:'categorias', label:'🏷️ Categorías'},
+  {id:'subir', label:'⬆️ Subir extracto'},
+  {id:'backup', label:'💾 Backup'}
+];
+
+function pendingCount(){
+  return state.transactions.filter(t=>t.estado==='pendiente').length;
+}
+
+function renderNav(){
+  const nav = document.getElementById('tabNav');
+  nav.innerHTML = '';
+  TABS.forEach(tab=>{
+    const btn = document.createElement('button');
+    btn.className = tab.id===currentTab ? 'active' : '';
+    let html = tab.label;
+    if(tab.id==='pendientes' && pendingCount()>0){
+      html += ' <span class="badge">'+pendingCount()+'</span>';
+    }
+    btn.innerHTML = html;
+    btn.onclick = ()=>{ currentTab = tab.id; render(); };
+    nav.appendChild(btn);
+  });
+}
+
+function render(){
+  renderNav();
+  const sub = document.getElementById('headerSub');
+  if(sub){
+    sub.textContent = cloudActive
+      ? '☁️ Sincronizado — funciona en cualquier dispositivo'
+      : '📱 Guardado solo en este navegador';
+  }
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  if(currentTab==='dashboard') renderDashboard(app);
+  else if(currentTab==='transacciones') renderTransacciones(app);
+  else if(currentTab==='pendientes') renderPendientes(app);
+  else if(currentTab==='categorias') renderCategorias(app);
+  else if(currentTab==='subir') renderSubir(app);
+  else if(currentTab==='backup') renderBackup(app);
+}
+
+/* ================= DASHBOARD ================= */
+function renderDashboard(app){
+  const wrap = document.createElement('div');
+
+  // month nav
+  const mn = document.createElement('div');
+  mn.className = 'month-nav';
+  mn.innerHTML = `
+    <button id="prevM">←</button>
+    <div class="label">${monthLabel(currentMonth)}</div>
+    <button id="nextM">→</button>
+  `;
+  wrap.appendChild(mn);
+
+  const txMonth = state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
+  const ingresos = txMonth.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto),0);
+  const gastos = txMonth.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto),0);
+  const balance = ingresos - gastos;
+
+  const summary = document.createElement('div');
+  summary.className = 'card grid3';
+  summary.innerHTML = `
+    <div class="stat"><div class="label">Ingresos</div><div class="value" style="color:var(--green)">${fmtMoney(ingresos)}</div></div>
+    <div class="stat"><div class="label">Gastos</div><div class="value" style="color:var(--red)">${fmtMoney(gastos)}</div></div>
+    <div class="stat"><div class="label">Balance</div><div class="value" style="color:${balance>=0?'var(--green)':'var(--red)'}">${fmtMoney(balance)}</div></div>
+  `;
+  wrap.appendChild(summary);
+
+  // Alerts
+  const alerts = [];
+  const gastoCats = state.categories.filter(c=>c.tipo==='Gasto' && categoryBudget(c)>0);
+  gastoCats.forEach(c=>{
+    const budget = categoryBudget(c);
+    const spent = txMonth.filter(t=>t.tipo==='Gasto' && t.categoria===c.nombre).reduce((s,t)=>s+Number(t.monto),0);
+    const pct = spent/budget*100;
+    if(pct>=100) alerts.push({level:'danger', msg:`Superaste el presupuesto de <b>${c.nombre}</b>: ${fmtMoney(spent)} de ${fmtMoney(budget)} (${pct.toFixed(0)}%)`});
+    else if(pct>=90) alerts.push({level:'warn', msg:`<b>${c.nombre}</b> está casi en el límite: ${pct.toFixed(0)}% del presupuesto usado`});
+  });
+  if(gastos>0 && ingresos>0 && gastos>ingresos){
+    alerts.push({level:'danger', msg:`Tus gastos del mes (${fmtMoney(gastos)}) superan tus ingresos (${fmtMoney(ingresos)})`});
+  }
+  if(pendingCount()>0){
+    alerts.push({level:'warn', msg:`Tienes <b>${pendingCount()}</b> transacción(es) pendientes de categorizar`});
+  }
+  if(alerts.length===0 && txMonth.length>0){
+    alerts.push({level:'ok', msg:'Todo en orden: sin alertas de presupuesto este mes 🎉'});
+  }
+  if(alerts.length){
+    const alertCard = document.createElement('div');
+    alertCard.className = 'card';
+    alertCard.innerHTML = '<h3 class="cat-title">Alertas</h3>';
+    alerts.forEach(a=>{
+      const d = document.createElement('div');
+      d.className = 'alert '+a.level;
+      d.innerHTML = (a.level==='danger'?'🚨 ':a.level==='warn'?'⚠️ ':'✅ ')+a.msg;
+      alertCard.appendChild(d);
+    });
+    wrap.appendChild(alertCard);
+  }
+
+  // Budget vs actual - Gastos
+  const budgetCard = document.createElement('div');
+  budgetCard.className = 'card';
+  budgetCard.innerHTML = '<h3 class="cat-title">Presupuesto vs. gasto real</h3>';
+  const gastoAll = state.categories.filter(c=>c.tipo==='Gasto');
+  if(gastoAll.length===0){
+    budgetCard.innerHTML += '<div class="empty">Aún no tienes categorías de gasto. Ve a la pestaña Categorías.</div>';
+  } else {
+    gastoAll.sort((a,b)=>{
+      const sa = txMonth.filter(t=>t.categoria===a.nombre && t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto),0);
+      const sb = txMonth.filter(t=>t.categoria===b.nombre && t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto),0);
+      return sb-sa;
+    }).forEach(c=>{
+      const spent = txMonth.filter(t=>t.categoria===c.nombre && t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto),0);
+      const budget = categoryBudget(c);
+      if(spent===0 && budget===0) return;
+      const pct = budget>0 ? Math.min(spent/budget*100,100) : (spent>0?100:0);
+      const pctClass = budget===0 ? 'pct-warn' : (spent/budget>=1?'pct-over':(spent/budget>=0.9?'pct-warn':'pct-ok'));
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML = `
+        <div class="bar-meta"><span>${c.nombre}</span><span>${fmtMoney(spent)}${budget>0?' / '+fmtMoney(budget):' (sin presupuesto)'}</span></div>
+        <div class="bar-track"><div class="bar-fill ${pctClass}" style="width:${pct}%"></div></div>
+      `;
+      budgetCard.appendChild(row);
+
+      // Subcategory breakdown, only when the category has subcategory budgets set
+      const subBudgets = c.subPresupuestos || {};
+      const hasSubBudgets = (c.subcategorias||[]).some(s=>Number(subBudgets[s])>0);
+      if(hasSubBudgets){
+        const subWrap = document.createElement('div');
+        subWrap.style = 'margin:2px 0 10px 14px;';
+        c.subcategorias.forEach(subName=>{
+          const subBudget = Number(subBudgets[subName])||0;
+          const subSpent = txMonth.filter(t=>t.categoria===c.nombre && t.subcategoria===subName && t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto),0);
+          if(subBudget===0 && subSpent===0) return;
+          const subPct = subBudget>0 ? Math.min(subSpent/subBudget*100,100) : (subSpent>0?100:0);
+          const subClass = subBudget===0 ? 'pct-warn' : (subSpent/subBudget>=1?'pct-over':(subSpent/subBudget>=0.9?'pct-warn':'pct-ok'));
+          const subRow = document.createElement('div');
+          subRow.className = 'bar-row';
+          subRow.style = 'margin-bottom:8px;';
+          subRow.innerHTML = `
+            <div class="bar-meta" style="font-size:0.72rem;"><span>↳ ${subName}</span><span>${fmtMoney(subSpent)}${subBudget>0?' / '+fmtMoney(subBudget):''}</span></div>
+            <div class="bar-track" style="height:6px;"><div class="bar-fill ${subClass}" style="width:${subPct}%"></div></div>
+          `;
+          subWrap.appendChild(subRow);
+        });
+        budgetCard.appendChild(subWrap);
+      }
+    });
+  }
+  wrap.appendChild(budgetCard);
+
+  // Ingresos por categoria
+  const incCard = document.createElement('div');
+  incCard.className = 'card';
+  incCard.innerHTML = '<h3 class="cat-title">Ingresos por categoría</h3>';
+  const incAll = state.categories.filter(c=>c.tipo==='Ingreso');
+  let anyInc = false;
+  incAll.forEach(c=>{
+    const got = txMonth.filter(t=>t.categoria===c.nombre && t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto),0);
+    const budget = categoryBudget(c);
+    if(got===0 && budget===0) return;
+    anyInc = true;
+    const pct = budget>0 ? Math.min(got/budget*100,100) : 100;
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML = `
+      <div class="bar-meta"><span>${c.nombre}</span><span>${fmtMoney(got)}${budget>0?' / '+fmtMoney(budget)+' esperado':''}</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--income)"></div></div>
+    `;
+    incCard.appendChild(row);
+  });
+  if(!anyInc) incCard.innerHTML += '<div class="empty">Sin ingresos registrados este mes.</div>';
+  wrap.appendChild(incCard);
+
+  // Chart: gastos por categoria (pie via chart.js)
+  if(gastos>0){
+    const chartCard = document.createElement('div');
+    chartCard.className = 'card';
+    chartCard.innerHTML = '<h3 class="cat-title">Distribución de gastos</h3><canvas id="pieChart"></canvas>';
+    wrap.appendChild(chartCard);
+    setTimeout(()=>{
+      const byCat = {};
+      txMonth.filter(t=>t.tipo==='Gasto').forEach(t=>{ byCat[t.categoria] = (byCat[t.categoria]||0)+Number(t.monto); });
+      const labels = Object.keys(byCat);
+      const data = labels.map(l=>byCat[l]);
+      const colors = ['#2563eb','#dc2626','#16a34a','#d97706','#7c3aed','#0891b2','#db2777','#65a30d','#ea580c','#4f46e5','#0d9488','#be185d','#ca8a04','#0284c7','#9333ea'];
+      new Chart(document.getElementById('pieChart'), {
+        type:'doughnut',
+        data:{labels, datasets:[{data, backgroundColor:labels.map((_,i)=>colors[i%colors.length])}]},
+        options:{plugins:{legend:{position:'bottom', labels:{color: getComputedStyle(document.body).color, boxWidth:12, font:{size:10}}}}}
+      });
+    },0);
+  }
+
+  app.appendChild(wrap);
+  document.getElementById('prevM').onclick = ()=>{ currentMonth = shiftMonth(currentMonth,-1); render(); };
+  document.getElementById('nextM').onclick = ()=>{ currentMonth = shiftMonth(currentMonth,1); render(); };
+}
+
+/* ================= TRANSACCIONES ================= */
+function getAvailableMonths(){
+  const months=new Set();
+  (state.transactions||[]).forEach(t=>{ const m=monthKey(t.fecha); if(m) months.add(m); });
+  months.add(todayKey());
+  return Array.from(months).sort().reverse();
+}
+function monthSelectOptions(selected){
+  const months=getAvailableMonths();
+  const names=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const groups={};
+  months.forEach(m=>{const [y,mo]=m.split('-'); (groups[y]??=[]).push(m);});
+  return Object.keys(groups).sort((a,b)=>Number(b)-Number(a)).map(y=>`<optgroup label="${y}">${groups[y].map(m=>{const mo=Number(m.split('-')[1]); return `<option value="${m}" ${m===selected?'selected':''}>${names[mo-1]} ${y}</option>`;}).join('')}</optgroup>`).join('');
+}
+
+function renderTransacciones(app){
+  const wrap = document.createElement('div');
+  const controls = document.createElement('div');
+  controls.className = 'card';
+  controls.innerHTML = `
+    <div class="grid2">
+      <div class="field"><label>Mes</label><select id="filterMonth">${monthSelectOptions(currentMonth)}</select></div>
+      <div class="field"><label>Tipo</label>
+        <select id="filterTipo"><option value="">Todos</option><option value="Ingreso">Ingresos</option><option value="Gasto">Gastos</option></select>
+      </div>
+    </div>
+    <div class="search-panel">
+      <div class="field search-wide"><label>Buscar</label><input type="search" id="txSearch" placeholder="Descripción, categoría, subcategoría, cuenta o referencia"></div>
+      <div class="field"><label>Categoría</label><select id="txCatFilter"><option value="">Todas</option></select></div>
+      <div class="field"><label>Subcategoría</label><select id="txSubFilter"><option value="">Todas</option></select></div>
+      <div class="field"><label>Cuenta</label><select id="txAccountFilter"><option value="">Todas</option></select></div>
+      <div class="field"><label>Estado</label><select id="txStatusFilter"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="categorizado">Categorizado</option></select></div>
+      <div class="field"><label>Desde</label><input type="date" id="txDateFrom"></div>
+      <div class="field"><label>Hasta</label><input type="date" id="txDateTo"></div>
+      <div class="field"><label>Monto mínimo</label><input type="text" inputmode="decimal" id="txMinAmount" placeholder="0"></div>
+      <div class="field"><label>Monto máximo</label><input type="text" inputmode="decimal" id="txMaxAmount" placeholder="0"></div>
+    </div>
+    <button class="btn secondary" id="clearTxFilters" style="margin-top:12px;">Limpiar filtros</button>
+    <button class="btn secondary" id="addManualBtn" style="margin-top:8px;">+ Agregar transacción manual</button>
+  `;
+  wrap.appendChild(controls);
+  const listCard = document.createElement('div'); listCard.className='card'; listCard.id='txListCard'; wrap.appendChild(listCard); app.appendChild(wrap);
+
+  function fillFilterOptions(){
+    const catSel=document.getElementById('txCatFilter'), subSel=document.getElementById('txSubFilter'), accSel=document.getElementById('txAccountFilter');
+    const cats=[...new Set(state.transactions.map(t=>t.categoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    const subs=[...new Set(state.transactions.map(t=>t.subcategoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    const accounts=[...new Set(state.transactions.map(t=>t.cuenta).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    catSel.innerHTML='<option value="">Todas</option>'+cats.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+    subSel.innerHTML='<option value="">Todas</option>'+subs.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+    accSel.innerHTML='<option value="">Todas</option>'+accounts.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+  }
+  fillFilterOptions();
+
+  function renderList(){
+    const m=document.getElementById('filterMonth').value; currentMonth=m||currentMonth;
+    const tipo=document.getElementById('filterTipo').value;
+    const q=normalize(document.getElementById('txSearch').value||'');
+    const cat=document.getElementById('txCatFilter').value, sub=document.getElementById('txSubFilter').value, acc=document.getElementById('txAccountFilter').value, status=document.getElementById('txStatusFilter').value;
+    const from=document.getElementById('txDateFrom').value, to=document.getElementById('txDateTo').value;
+    const minTxt=document.getElementById('txMinAmount').value, maxTxt=document.getElementById('txMaxAmount').value;
+    const min=minTxt?parseAmount(minTxt):null, max=maxTxt?parseAmount(maxTxt):null;
+    let list=state.transactions.slice();
+    if(m) list=list.filter(t=>monthKey(t.fecha)===m);
+    if(tipo) list=list.filter(t=>t.tipo===tipo);
+    if(q) list=list.filter(t=>normalize([t.descripcion,t.categoria,t.subcategoria,t.cuenta,t.referencia,t.referencia_id].filter(Boolean).join(' ')).includes(q));
+    if(cat) list=list.filter(t=>t.categoria===cat); if(sub) list=list.filter(t=>t.subcategoria===sub); if(acc) list=list.filter(t=>t.cuenta===acc); if(status) list=list.filter(t=>t.estado===status);
+    if(from) list=list.filter(t=>(t.fecha||'')>=from); if(to) list=list.filter(t=>(t.fecha||'')<=to);
+    if(min!==null && !Number.isNaN(min)) list=list.filter(t=>Number(t.monto)>=min); if(max!==null && !Number.isNaN(max)) list=list.filter(t=>Number(t.monto)<=max);
+    list.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+    const card=document.getElementById('txListCard');
+    if(!list.length){card.innerHTML='<div class="empty">No hay transacciones para estos filtros.</div>';return;}
+    let html='<div style="font-size:.85rem;color:var(--muted);margin-bottom:8px;">'+list.length+' transacción(es)</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
+    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
+    html+='</tbody></table></div>'; card.innerHTML=html;
+    card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEditTransaction(b.dataset.edit));
+    card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ const tx=state.transactions.find(t=>t.id===b.dataset.del); if(!tx) return; showDeleteTransactionModal(tx, async()=>{ const original=state.transactions.slice(); state.transactions=state.transactions.filter(t=>t.id!==tx.id); const result=await saveState(); if(!result.cloud){ state.transactions=original; throw (result.error||new Error('No se pudo sincronizar con Supabase')); } renderList(); renderNav(); showToast('Transacción eliminada y sincronizada.'); }); });
+  }
+  ['filterMonth','filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo'].forEach(id=>document.getElementById(id).onchange=renderList);
+  ['txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).addEventListener('input',renderList));
+  document.getElementById('clearTxFilters').onclick=()=>{document.getElementById('filterMonth').value=currentMonth;['filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo','txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');renderList();};
+  document.getElementById('addManualBtn').onclick=()=>openManualForm(); renderList();
+}
+
+function openEditTransaction(txId){
+  const tx = state.transactions.find(t=>t.id===txId);
+  if(!tx) return;
+  const overlay=document.createElement('div');
+  overlay.style='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;';
+  const cats=state.categories.filter(c=>c.tipo===tx.tipo);
+  overlay.innerHTML=`
+    <div class="card" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+      <h3 class="cat-title">Editar transacción</h3>
+      <div class="field"><label>Fecha</label><input type="date" id="eFecha" value="${tx.fecha||''}"></div>
+      <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
+      <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${c.nombre}" ${c.nombre===tx.categoria?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
+      <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
+      <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;">
+        <button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  function refreshSubs(){
+    const cat=getCategory(tx.tipo,document.getElementById('eCat').value);
+    const subs=cat?.subcategorias||[];
+    document.getElementById('eSub').innerHTML='<option value="">(ninguna)</option>'+subs.map(s=>`<option value="${s}" ${s===tx.subcategoria?'selected':''}>${s}</option>`).join('');
+  }
+  document.getElementById('eCat').onchange=refreshSubs;
+  refreshSubs();
+  document.getElementById('eCancel').onclick=()=>overlay.remove();
+  document.getElementById('eSave').onclick=()=>{
+    const fecha=document.getElementById('eFecha').value;
+    const monto=parseAmount(document.getElementById('eMonto').value);
+    if(!fecha){showToast('Ingresa una fecha válida');return;}
+    if(!monto || monto<=0){showToast('Ingresa un monto válido');return;}
+    tx.fecha=fecha;
+    tx.monto=monto;
+    tx.categoria=document.getElementById('eCat').value;
+    tx.subcategoria=document.getElementById('eSub').value||null;
+    const result=saveState();
+    if(result && typeof result.then==='function') result.then(r=>{ if(r?.cloud===false) showToast('⚠️ No se pudo guardar en la nube'); else showToast('✅ Transacción actualizada'); });
+    else showToast('Transacción actualizada');
+    overlay.remove();
+    render();
+  };
+}
+
+function openManualForm(){
+  const overlay = document.createElement('div');
+  overlay.style = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;';
+  const gastoCats = state.categories.filter(c=>c.tipo==='Gasto');
+  const incCats = state.categories.filter(c=>c.tipo==='Ingreso');
+  overlay.innerHTML = `
+    <div class="card" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+      <h3 class="cat-title">Nueva transacción</h3>
+      <div class="field"><label>Tipo</label>
+        <select id="mTipo"><option value="Gasto">Gasto</option><option value="Ingreso">Ingreso</option></select>
+      </div>
+      <div class="field"><label>Fecha</label><input type="date" id="mFecha" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div class="field"><label>Descripción</label><input type="text" id="mDesc" placeholder="Ej. Almuerzo"></div>
+      <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="mMonto" placeholder="0" onfocus="this.select()"></div>
+      <div class="field"><label>Categoría</label><select id="mCat"></select></div>
+      <div class="field"><label>Subcategoría</label><select id="mSub"><option value="">(ninguna)</option></select></div>
+      <div class="row-actions" style="justify-content:flex-end;margin-top:10px;">
+        <button class="btn secondary" id="mCancel">Cancelar</button>
+        <button class="btn" id="mSave">Guardar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  function refreshCats(){
+    const tipo = document.getElementById('mTipo').value;
+    const cats = tipo==='Gasto'?gastoCats:incCats;
+    document.getElementById('mCat').innerHTML = cats.map(c=>`<option value="${c.nombre}">${c.nombre}</option>`).join('');
+    refreshSubs();
+  }
+  function refreshSubs(){
+    const tipo = document.getElementById('mTipo').value;
+    const catName = document.getElementById('mCat').value;
+    const cat = getCategory(tipo, catName);
+    const subs = cat ? cat.subcategorias : [];
+    document.getElementById('mSub').innerHTML = '<option value="">(ninguna)</option>' + subs.map(s=>`<option value="${s}">${s}</option>`).join('');
+  }
+  document.getElementById('mTipo').onchange = refreshCats;
+  document.getElementById('mCat').onchange = refreshSubs;
+  refreshCats();
+
+  document.getElementById('mCancel').onclick = ()=>overlay.remove();
+  document.getElementById('mSave').onclick = ()=>{
+    const monto = parseAmount(document.getElementById('mMonto').value);
+    if(!monto || monto<=0){ showToast('Ingresa un monto válido'); return; }
+    state.transactions.push({
+      id: uid('tx'),
+      fecha: document.getElementById('mFecha').value,
+      descripcion: document.getElementById('mDesc').value || '(sin descripción)',
+      monto,
+      tipo: document.getElementById('mTipo').value,
+      categoria: document.getElementById('mCat').value,
+      subcategoria: document.getElementById('mSub').value || null,
+      cuenta: 'Manual',
+      origen: 'manual',
+      estado: 'categorizado',
+      refId: null
+    });
+    saveState();
+    overlay.remove();
+    showToast('Transacción agregada');
+    render();
+  };
+}
+
+/* ================= PENDIENTES ================= */
+function renderPendientes(app){
+  const wrap=document.createElement('div');
+  const controls=document.createElement('div'); controls.className='card';
+  controls.innerHTML=`<div class="search-panel" style="margin-top:0;">
+    <div class="field search-wide"><label>Buscar</label><input type="search" id="pSearch" placeholder="Descripción, cuenta o referencia"></div>
+    <div class="field"><label>Tipo</label><select id="pTipo"><option value="">Todos</option><option value="Gasto">Gastos</option><option value="Ingreso">Ingresos</option></select></div>
+    <div class="field"><label>Cuenta</label><select id="pCuenta"><option value="">Todas</option></select></div>
+    <div class="field"><label>Desde</label><input type="date" id="pDesde"></div>
+    <div class="field"><label>Hasta</label><input type="date" id="pHasta"></div>
+    <div class="field"><label>Monto mínimo</label><input type="text" inputmode="decimal" id="pMin" placeholder="0"></div>
+    <div class="field"><label>Monto máximo</label><input type="text" inputmode="decimal" id="pMax" placeholder="0"></div>
+  </div><button class="btn secondary" id="clearPFilters" style="margin-top:12px;">Limpiar filtros</button>`;
+  wrap.appendChild(controls);
+  const accounts=[...new Set(state.transactions.filter(t=>t.estado==='pendiente').map(t=>t.cuenta).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  document.getElementById; // keep DOM creation simple
+  controls.querySelector('#pCuenta').innerHTML='<option value="">Todas</option>'+accounts.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+  const listWrap=document.createElement('div'); wrap.appendChild(listWrap); app.appendChild(wrap);
+
+  function renderList(){
+    const q=normalize(document.getElementById('pSearch').value||''), tipo=document.getElementById('pTipo').value, cuenta=document.getElementById('pCuenta').value;
+    const desde=document.getElementById('pDesde').value,hasta=document.getElementById('pHasta').value,minTxt=document.getElementById('pMin').value,maxTxt=document.getElementById('pMax').value;
+    const min=minTxt?parseAmount(minTxt):null,max=maxTxt?parseAmount(maxTxt):null;
+    let pend=state.transactions.filter(t=>t.estado==='pendiente');
+    if(q) pend=pend.filter(t=>normalize([t.descripcion,t.cuenta,t.referencia,t.referencia_id].filter(Boolean).join(' ')).includes(q));
+    if(tipo) pend=pend.filter(t=>t.tipo===tipo); if(cuenta) pend=pend.filter(t=>t.cuenta===cuenta); if(desde) pend=pend.filter(t=>(t.fecha||'')>=desde); if(hasta) pend=pend.filter(t=>(t.fecha||'')<=hasta); if(min!==null&&!Number.isNaN(min)) pend=pend.filter(t=>Number(t.monto)>=min); if(max!==null&&!Number.isNaN(max)) pend=pend.filter(t=>Number(t.monto)<=max);
+    pend.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+    listWrap.innerHTML='';
+    if(!pend.length){listWrap.innerHTML='<div class="card"><div class="empty">No hay transacciones pendientes para estos filtros.</div></div>';return;}
+    const info=document.createElement('div');info.className='card';info.innerHTML=`<b>${pend.length}</b> transacción(es) esperando una categoría. Asígnalas para que el sistema aprenda y las reconozca automáticamente la próxima vez.`;listWrap.appendChild(info);
+    pend.forEach(t=>{
+      const gastoCats=state.categories.filter(c=>c.tipo==='Gasto'),incCats=state.categories.filter(c=>c.tipo==='Ingreso');
+      const div=document.createElement('div');div.className='pending-item';div.innerHTML=`<div class="desc">${escapeHtml(t.descripcion)}</div><div class="meta">${escapeHtml(t.fecha||'')} · ${escapeHtml(t.cuenta||'')} · <b>${fmtMoney(t.monto)}</b> · <span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo)}</span></div><div class="inline-form"><div><select class="pTipo"><option value="Gasto" ${t.tipo==='Gasto'?'selected':''}>Gasto</option><option value="Ingreso" ${t.tipo==='Ingreso'?'selected':''}>Ingreso</option></select></div><div><select class="pCat"></select></div><div><select class="pSub"></select></div></div><div class="inline-form" style="margin-top:8px;"><div><input type="text" class="pNewCat" placeholder="O escribe categoría nueva"></div><div><button class="btn" style="width:100%" data-assign="${t.id}">Asignar</button></div></div>`;listWrap.appendChild(div);
+      const tipoSel=div.querySelector('.pTipo'),catSel=div.querySelector('.pCat'),subSel=div.querySelector('.pSub');
+      function refreshCats(){const cats=tipoSel.value==='Gasto'?gastoCats:incCats;catSel.innerHTML='<option value="">(elegir)</option>'+cats.map(c=>`<option value="${escapeHtml(c.nombre)}" ${c.nombre===t.categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('');refreshSubs();}
+      function refreshSubs(){const cat=getCategory(tipoSel.value,catSel.value),subs=cat?cat.subcategorias:[];subSel.innerHTML='<option value="">(ninguna)</option>'+subs.map(s=>`<option value="${escapeHtml(s)}" ${s===t.subcategoria?'selected':''}>${escapeHtml(s)}</option>`).join('');}
+      tipoSel.onchange=refreshCats;catSel.onchange=refreshSubs;refreshCats();
+      div.querySelector('[data-assign]').onclick=()=>{const newCatName=div.querySelector('.pNewCat').value.trim(),tipo=tipoSel.value;let catName=catSel.value;if(newCatName){catName=newCatName;if(!getCategory(tipo,catName))state.categories.push({id:uid('cat'),tipo,nombre:catName,subcategorias:[],presupuesto:0,subPresupuestos:{}});}if(!catName){showToast('Elige o crea una categoría');return;}const sub=subSel.value||null;t.tipo=tipo;t.categoria=catName;t.subcategoria=sub;t.estado='categorizado';const words=normalize(t.descripcion).match(/[a-z]{4,}/g)||[];words.slice(0,3).forEach(w=>{if(!state.rules.find(r=>r.keyword===w))state.rules.push({id:uid('rule'),keyword:w,tipo,categoria:catName,subcategoria:sub});});saveState();showToast('Transacción categorizada');render();};
+    });
+  }
+  ['pTipo','pCuenta','pDesde','pHasta'].forEach(id=>controls.querySelector('#'+id).onchange=renderList);
+  ['pSearch','pMin','pMax'].forEach(id=>controls.querySelector('#'+id).addEventListener('input',renderList));
+  controls.querySelector('#clearPFilters').onclick=()=>{['pSearch','pTipo','pCuenta','pDesde','pHasta','pMin','pMax'].forEach(id=>controls.querySelector('#'+id).value='');renderList();};
+  renderList();
+}
+
+/* ================= CATEGORIAS ================= */
+
+function escapeHtml(value){
+  return String(value ?? '').replace(/[&<>\"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+function showNewSubcategoryModal(cat, onCreate){
+  const old=document.getElementById('newSubcategoryModal');
+  if(old) old.remove();
+
+  const overlay=document.createElement('div');
+  overlay.id='newSubcategoryModal';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.68);display:flex;align-items:center;justify-content:center;z-index:9999;padding:18px;';
+  overlay.innerHTML=`
+    <div role="dialog" aria-modal="true" style="width:min(430px,100%);background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="font-size:1.15rem;font-weight:800;margin-bottom:6px;">➕ Nueva subcategoría</div>
+      <div style="font-size:.88rem;color:var(--muted);margin-bottom:16px;">Se agregará dentro de <b style="color:var(--text);">${escapeHtml(cat.nombre)}</b>.</div>
+      <div class="field" style="margin-bottom:12px;">
+        <label for="newSubName">Nombre de la subcategoría</label>
+        <input type="text" id="newSubName" placeholder="Ej. Lavado" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="newSubBudget">Presupuesto mensual (Bs)</label>
+        <input type="text" inputmode="decimal" id="newSubBudget" placeholder="0" value="" onfocus="this.select()">
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+        <button type="button" id="cancelNewSub" class="btn secondary">Cancelar</button>
+        <button type="button" id="saveNewSub" class="btn" style="background:var(--green);">Crear subcategoría</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const nameInput=overlay.querySelector('#newSubName');
+  const budgetInput=overlay.querySelector('#newSubBudget');
+  const close=()=>overlay.remove();
+  overlay.querySelector('#cancelNewSub').onclick=close;
+  overlay.addEventListener('click',e=>{ if(e.target===overlay) close(); });
+  nameInput.focus();
+
+  overlay.querySelector('#saveNewSub').onclick=async()=>{
+    const name=nameInput.value.trim();
+    const budget=parseAmount(budgetInput.value);
+    if(!name){ showToast('Ingresa el nombre de la subcategoría'); nameInput.focus(); return; }
+    if(cat.subcategorias.includes(name)){ showToast('Esa subcategoría ya existe'); nameInput.focus(); return; }
+    const btn=overlay.querySelector('#saveNewSub');
+    btn.disabled=true;
+    btn.textContent='Creando…';
+    try{
+      await onCreate(name, budget>0?budget:0);
+      close();
+    }catch(err){
+      console.error(err);
+      btn.disabled=false;
+      btn.textContent='Crear subcategoría';
+      showToast('⚠️ No se pudo crear la subcategoría.');
+    }
+  };
+
+  nameInput.addEventListener('keydown',e=>{ if(e.key==='Enter') overlay.querySelector('#saveNewSub').click(); });
+}
+
+function showDeleteTransactionModal(tx, onConfirm){
+  const old=document.getElementById('deleteTransactionModal');
+  if(old) old.remove();
+  const overlay=document.createElement('div');
+  overlay.id='deleteTransactionModal';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.68);display:flex;align-items:center;justify-content:center;z-index:10001;padding:18px;';
+  const tipo=tx.tipo==='Gasto'?'Gasto':'Ingreso';
+  const monto=fmtMoney(tx.monto);
+  const categoria=tx.categoria||'Sin categoría';
+  const subcategoria=tx.subcategoria||'Sin subcategoría';
+  overlay.innerHTML=`
+    <div role="dialog" aria-modal="true" style="width:min(520px,100%);background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="font-size:1.15rem;font-weight:800;margin-bottom:10px;">⚠️ Eliminar transacción</div>
+      <div style="font-size:.92rem;line-height:1.55;color:var(--text);">
+        Estás a punto de eliminar esta transacción de forma permanente:
+        <div style="margin-top:12px;padding:13px;border:1px solid var(--border);border-radius:10px;background:var(--bg);">
+          <div style="font-weight:800;margin-bottom:7px;">${escapeHtml(tx.descripcion||'Sin descripción')}</div>
+          <div style="color:var(--muted);display:grid;gap:4px;">
+            <div><b>Fecha:</b> ${escapeHtml(tx.fecha||'-')}</div>
+            <div><b>Monto:</b> ${escapeHtml(monto)}</div>
+            <div><b>Tipo:</b> ${escapeHtml(tipo)}</div>
+            <div><b>Categoría:</b> ${escapeHtml(categoria)}</div>
+            <div><b>Subcategoría:</b> ${escapeHtml(subcategoria)}</div>
+            <div><b>Cuenta:</b> ${escapeHtml(tx.cuenta||'-')}</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;color:var(--muted);">
+          Al confirmar:
+          <ul style="margin:8px 0 0 20px;padding:0;">
+            <li>La transacción desaparecerá de la aplicación.</li>
+            <li>También se eliminará de Supabase.</li>
+            <li>La operación no se podrá deshacer desde la aplicación.</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:16px;padding:11px;border-radius:9px;background:rgba(220,38,38,.09);color:#dc2626;font-size:.85rem;font-weight:600;">
+        Revisa los datos antes de confirmar. Debes esperar 10 segundos.
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+        <button type="button" id="cancelDeleteTransaction" class="btn">Cancelar</button>
+        <button type="button" id="confirmDeleteTransaction" class="btn" disabled style="background:#dc2626;color:#fff;opacity:.55;cursor:not-allowed;">Eliminar (10)</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const cancel=overlay.querySelector('#cancelDeleteTransaction');
+  const confirm=overlay.querySelector('#confirmDeleteTransaction');
+  let seconds=10;
+  const timer=setInterval(()=>{
+    seconds--;
+    if(seconds>0){
+      confirm.textContent=`Eliminar (${seconds})`;
+    }else{
+      clearInterval(timer);
+      confirm.textContent='Eliminar';
+      confirm.disabled=false;
+      confirm.style.opacity='1';
+      confirm.style.cursor='pointer';
+    }
+  },1000);
+  const close=()=>{ clearInterval(timer); overlay.remove(); };
+  cancel.onclick=close;
+  overlay.addEventListener('click',e=>{ if(e.target===overlay) close(); });
+  confirm.onclick=async()=>{
+    if(confirm.disabled) return;
+    confirm.disabled=true;
+    confirm.innerHTML='<span class="d-spinner">D</span>&nbsp; Eliminando…';
+    try{
+      await onConfirm();
+      close();
+    }catch(err){
+      console.error(err);
+      confirm.disabled=false;
+      confirm.textContent='Reintentar';
+      confirm.style.opacity='1';
+      confirm.style.cursor='pointer';
+      showToast('⚠️ No se pudo eliminar la transacción.');
+    }
+  };
+}
+
+function showDeleteSubcategoryModal(cat, sub, onConfirm){
+  const old=document.getElementById('deleteSubcategoryModal');
+  if(old) old.remove();
+
+  const overlay=document.createElement('div');
+  overlay.id='deleteSubcategoryModal';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.68);display:flex;align-items:center;justify-content:center;z-index:9999;padding:18px;';
+  overlay.innerHTML=`
+    <div role="dialog" aria-modal="true" style="width:min(500px,100%);background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="font-size:1.15rem;font-weight:800;margin-bottom:10px;">⚠️ Eliminar subcategoría</div>
+      <div style="font-size:.92rem;line-height:1.55;color:var(--text);">
+        Estás a punto de eliminar <b>"${escapeHtml(sub)}"</b> de la categoría <b>"${escapeHtml(cat.nombre)}"</b>.
+        <div style="margin-top:12px;color:var(--muted);">
+          Al confirmar:
+          <ul style="margin:8px 0 0 20px;padding:0;">
+            <li>La subcategoría desaparecerá de esta categoría.</li>
+            <li>Su presupuesto asociado será eliminado.</li>
+            <li>Las reglas automáticas asociadas a esta subcategoría dejarán de existir.</li>
+            <li>Las transacciones que la usaban conservarán su monto y categoría, pero quedarán sin subcategoría.</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:18px;padding:10px 12px;border-radius:8px;background:var(--bg);text-align:center;font-size:.86rem;color:var(--muted);">
+        Debes esperar <b id="deleteSubCountdown">10</b> segundos antes de confirmar.
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px;">
+        <button type="button" id="cancelDeleteSub" class="btn">Cancelar</button>
+        <button type="button" id="confirmDeleteSub" class="btn" disabled style="background:#dc2626;color:#fff;opacity:.55;cursor:not-allowed;">Eliminar (10)</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const cancel=overlay.querySelector('#cancelDeleteSub');
+  const confirmBtn=overlay.querySelector('#confirmDeleteSub');
+  const count=overlay.querySelector('#deleteSubCountdown');
+  let seconds=10;
+  const timer=setInterval(()=>{
+    seconds--;
+    if(seconds>0){
+      count.textContent=seconds;
+      confirmBtn.textContent=`Eliminar (${seconds})`;
+    }else{
+      clearInterval(timer);
+      count.textContent='0';
+      confirmBtn.textContent='Eliminar';
+      confirmBtn.disabled=false;
+      confirmBtn.style.opacity='1';
+      confirmBtn.style.cursor='pointer';
+    }
+  },1000);
+
+  const close=()=>{ clearInterval(timer); overlay.remove(); };
+  cancel.onclick=close;
+  overlay.addEventListener('click',e=>{ if(e.target===overlay) close(); });
+  confirmBtn.onclick=async()=>{
+    if(confirmBtn.disabled) return;
+    confirmBtn.disabled=true;
+    confirmBtn.textContent='Eliminando…';
+    try{
+      await onConfirm();
+      close();
+    }catch(err){
+      console.error(err);
+      confirmBtn.disabled=false;
+      confirmBtn.textContent='Reintentar';
+      confirmBtn.style.opacity='1';
+      confirmBtn.style.cursor='pointer';
+      showToast('⚠️ No se pudo eliminar la subcategoría.');
+    }
+  };
+}
+
+
+function showDeleteCategoryModal(cat, onConfirm){
+  const old=document.getElementById('deleteCategoryModal');
+  if(old) old.remove();
+  const overlay=document.createElement('div');
+  overlay.id='deleteCategoryModal';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.68);display:flex;align-items:center;justify-content:center;z-index:10000;padding:18px;';
+  overlay.innerHTML=`
+    <div role="dialog" aria-modal="true" style="width:min(500px,100%);background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+      <div style="font-size:1.15rem;font-weight:800;margin-bottom:10px;">⚠️ Eliminar categoría</div>
+      <div style="font-size:.92rem;line-height:1.55;color:var(--text);">
+        Estás a punto de eliminar la categoría <b>"${escapeHtml(cat.nombre)}"</b>.
+        <div style="margin-top:12px;color:var(--muted);">
+          Al confirmar:
+          <ul style="margin:8px 0 0 20px;padding:0;">
+            <li>Se eliminará la categoría y todas sus subcategorías.</li>
+            <li>Se eliminarán sus presupuestos y reglas automáticas asociadas.</li>
+            <li>Las transacciones existentes no se eliminarán.</li>
+            <li>Las transacciones asociadas quedarán sin categoría y sin subcategoría.</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:16px;padding:11px;border-radius:9px;background:rgba(220,38,38,.09);color:#dc2626;font-size:.85rem;font-weight:600;">
+        Esta acción no se puede deshacer desde la aplicación.
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+        <button type="button" id="cancelDeleteCategory" class="btn">Cancelar</button>
+        <button type="button" id="confirmDeleteCategory" class="btn" disabled style="background:#dc2626;color:#fff;opacity:.65;">Eliminar (10)</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const cancel=overlay.querySelector('#cancelDeleteCategory');
+  const confirm=overlay.querySelector('#confirmDeleteCategory');
+  let n=10;
+  const timer=setInterval(()=>{
+    n--;
+    if(n<=0){
+      clearInterval(timer);
+      confirm.disabled=false;
+      confirm.textContent='Eliminar';
+      confirm.style.opacity='1';
+    }else confirm.textContent=`Eliminar (${n})`;
+  },1000);
+  cancel.onclick=()=>{ clearInterval(timer); overlay.remove(); };
+  confirm.onclick=async()=>{
+    if(confirm.disabled) return;
+    confirm.disabled=true;
+    confirm.innerHTML='<span class="d-spinner">D</span>&nbsp; Eliminando…';
+    try{ await onConfirm(); overlay.remove(); }
+    catch(err){
+      console.error(err);
+      confirm.disabled=false;
+      confirm.textContent='Error. Reintentar';
+      confirm.style.opacity='1';
+      showToast('⚠️ No se pudo eliminar la categoría.');
+    }
+  };
+}
+
+function renderCategorias(app){
+  const wrap = document.createElement('div');
+
+  ['Gasto','Ingreso'].forEach(tipo=>{
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `<h3 class="cat-title">${tipo==='Gasto'?'Categorías de gasto':'Categorías de ingreso'}</h3>`;
+    const cats = state.categories.filter(c=>c.tipo===tipo);
+
+    cats.forEach(c=>{
+      const details = document.createElement('details');
+      details.className = 'category-dropdown';
+      details.style.cssText = 'border:1px solid var(--border);border-radius:12px;margin:8px 0;background:var(--card);overflow:hidden;';
+
+      const summary = document.createElement('summary');
+      summary.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 15px;cursor:pointer;list-style:none;font-weight:700;';
+      summary.innerHTML = `
+        <span style="display:flex;align-items:center;gap:9px;min-width:0;">
+          <span style="font-size:0.9rem;opacity:.65;">▶</span>
+          <span>${c.nombre}</span>
+        </span>
+        <span style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+          <button type="button" data-addsubtop="${c.id}" title="Nueva subcategoría" aria-label="Nueva subcategoría" style="border:none;background:none;color:var(--green);font-size:1.45rem;font-weight:700;line-height:1;cursor:pointer;padding:2px 5px;">+</button>
+          <button type="button" data-editcat="${c.id}" title="Editar categoría" aria-label="Editar categoría" style="border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font-size:0.88rem;line-height:1;cursor:pointer;padding:6px 7px;">✎</button>
+          <button type="button" data-delcat="${c.id}" title="Eliminar categoría" aria-label="Eliminar categoría" style="display:none;border:none;background:none;color:#dc2626;font-size:0.95rem;font-weight:700;cursor:pointer;padding:4px 5px;">✕</button>
+        </span>
+      `;
+      const addBtn = summary.querySelector('[data-addsubtop]');
+      const editBtn = summary.querySelector('[data-editcat]');
+      const delCatBtn = summary.querySelector('[data-delcat]');
+      addBtn.addEventListener('click', e=>e.stopPropagation());
+      editBtn.addEventListener('click', e=>e.stopPropagation());
+      delCatBtn.addEventListener('click', e=>e.stopPropagation());
+      details.appendChild(summary);
+
+      const body = document.createElement('div');
+      body.style.cssText = 'padding:0 15px 14px;border-top:1px solid var(--border);';
+      const hasSubs = c.subcategorias && c.subcategorias.length>0;
+
+      const budgetInfo = document.createElement('div');
+      budgetInfo.style.cssText = 'font-size:0.78rem;color:var(--muted);margin:12px 0 10px;';
+      budgetInfo.innerHTML = hasSubs
+        ? `Presupuesto total: <b>${fmtMoney(categoryBudget(c))}</b> (se suma automáticamente de las subcategorías)`
+        : `Presupuesto mensual (Bs)`;
+      body.appendChild(budgetInfo);
+
+      if(hasSubs){
+        const list = document.createElement('div');
+        list.className = 'sub-budget-list';
+        list.innerHTML = c.subcategorias.map(sub=>{
+          const safeSub = String(sub).replace(/\\/g,'\\\\').replace(/"/g,'&quot;');
+          return `
+          <div class="inline-form" style="align-items:center;margin-bottom:7px;" data-subrow="${c.id}|${safeSub}">
+            <div style="flex:2;min-width:110px;font-size:0.85rem;">${sub}</div>
+            <div style="flex:1;min-width:90px;"><input type="text" inputmode="decimal" class="subBudgetInput" data-subbudget="${c.id}|${sub}" value="${(c.subPresupuestos&&c.subPresupuestos[sub])>0?c.subPresupuestos[sub]:''}" placeholder="0" onfocus="this.select()"></div>
+            <span class="sub-edit-actions" style="display:none;gap:2px;align-items:center;">
+              <button type="button" data-editsub="${c.id}|${sub}" title="Editar subcategoría" style="border:1px solid var(--border);border-radius:6px;background:var(--bg);cursor:pointer;padding:4px 6px;">✎</button>
+              <button type="button" data-delsub="${c.id}|${sub}" title="Eliminar subcategoría" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:0.9rem;padding:4px 5px;">✕</button>
+            </span>
+          </div>`;
+        }).join('');
+        body.appendChild(list);
+      } else {
+        const budget = document.createElement('input');
+        budget.type = 'text';
+        budget.inputMode = 'decimal';
+        budget.className = 'budgetInput';
+        budget.dataset.budget = c.id;
+        budget.value = c.presupuesto>0 ? c.presupuesto : '';
+        budget.placeholder = '0';
+        budget.style.cssText = 'width:100%;box-sizing:border-box;';
+        budget.onfocus = function(){this.select();};
+        body.appendChild(budget);
+      }
+
+      details.appendChild(body);
+      card.appendChild(details);
+
+      // El botón + abre un formulario para crear la subcategoría.
+      addBtn.onclick = e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        collectBudgetInputs();
+        showNewSubcategoryModal(c, async(name, budget)=>{
+          c.subcategorias.push(name);
+          if(!c.subPresupuestos) c.subPresupuestos = {};
+          c.subPresupuestos[name] = budget;
+          const result=await saveState();
+          if(result && result.cloud===false && result.error) throw result.error;
+          showToast('✅ Subcategoría creada');
+          render();
+        });
+      };
+
+      // Modo edición: muestra/oculta las acciones de cada subcategoría.
+      editBtn.onclick = e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const actions = body.querySelectorAll('.sub-edit-actions');
+        const editing = editBtn.dataset.editing === '1';
+        actions.forEach(a=>a.style.display = editing ? 'none' : 'flex');
+        editBtn.dataset.editing = editing ? '0' : '1';
+        editBtn.innerHTML = editing ? '✎' : '✓';
+        editBtn.title = editing ? 'Editar categoría' : 'Terminar edición';
+        delCatBtn.style.display = editing ? 'none' : 'inline-block';
+      };
+
+      delCatBtn.onclick = e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        collectBudgetInputs();
+        showDeleteCategoryModal(c, async()=>{
+          // Las transacciones se conservan; solo pierden la categoría/subcategoría.
+          (state.transactions||[]).forEach(t=>{
+            if(t.categoria===c.nombre){
+              t.categoria=null;
+              t.subcategoria=null;
+            }
+          });
+          state.categories = state.categories.filter(x=>x.id!==c.id);
+          if(currentUser && UUID_RE.test(c.id||'')){
+            const {error}=await supabaseClient.from('categorias').delete()
+              .eq('usuario_id',currentUser.id).eq('id',c.id);
+            if(error) throw error;
+          }
+          const result=await saveState();
+          if(result && result.cloud===false && result.error) throw result.error;
+          showToast('✅ Categoría eliminada');
+          render();
+        });
+      };
+
+      body.querySelectorAll('[data-editsub]').forEach(btn=>{
+        btn.onclick = ()=>{
+          collectBudgetInputs();
+          const [catId, oldName] = btn.dataset.editsub.split('|');
+          const cat = state.categories.find(x=>x.id===catId);
+          if(!cat) return;
+          const newName = prompt('Editar subcategoría:', oldName);
+          if(newName===null) return;
+          const name = newName.trim();
+          if(!name || name===oldName) return;
+          if(cat.subcategorias.includes(name)){ showToast('Esa subcategoría ya existe'); return; }
+          const idx = cat.subcategorias.indexOf(oldName);
+          if(idx<0) return;
+          cat.subcategorias[idx] = name;
+          if(!cat.subPresupuestos) cat.subPresupuestos = {};
+          cat.subPresupuestos[name] = cat.subPresupuestos[oldName] || 0;
+          delete cat.subPresupuestos[oldName];
+          saveState().then(result=>{
+            if(result && result.cloud===false && result.error) showToast('⚠️ Se guardó localmente; no se pudo sincronizar.');
+            else showToast('✅ Subcategoría actualizada');
+          });
+          render();
+        };
+      });
+
+      body.querySelectorAll('[data-delsub]').forEach(btn=>{
+        btn.onclick = e=>{
+          e.preventDefault();
+          e.stopPropagation();
+          collectBudgetInputs();
+          const raw=btn.dataset.delsub || '';
+          const sep=raw.indexOf('|');
+          if(sep<0) return;
+          const catId=raw.slice(0,sep);
+          const sub=raw.slice(sep+1);
+          const cat=state.categories.find(x=>x.id===catId);
+          if(!cat) return;
+
+          showDeleteSubcategoryModal(cat, sub, async()=>{
+            // Primero actualizamos el estado local para que la interfaz y los
+            // cálculos de presupuesto queden consistentes.
+            cat.subcategorias=cat.subcategorias.filter(x=>x!==sub);
+            if(cat.subPresupuestos) delete cat.subPresupuestos[sub];
+
+            // Las transacciones conservan la categoría y el monto, pero pierden
+            // únicamente la subcategoría eliminada.
+            (state.transactions||[]).forEach(t=>{
+              if(t.categoria===cat.nombre && t.subcategoria===sub) t.subcategoria=null;
+            });
+
+            // Eliminación explícita en Supabase. Las FK de presupuesto/reglas
+            // están configuradas con CASCADE y las transacciones con SET NULL.
+            if(currentUser && UUID_RE.test(cat.id||'')){
+              const {error}=await supabaseClient
+                .from('subcategorias')
+                .delete()
+                .eq('usuario_id',currentUser.id)
+                .eq('categoria_id',cat.id)
+                .eq('nombre',sub);
+              if(error) throw error;
+            }
+
+            const result=await saveState();
+            if(result && result.cloud===false && result.error) throw result.error;
+            showToast('✅ Subcategoría eliminada');
+            render();
+          });
+        };
+      });
+    });
+
+    if(cats.length===0) card.innerHTML += '<div class="empty">Sin categorías todavía.</div>';
+
+    const addForm = document.createElement('div');
+    addForm.className = 'inline-form';
+    addForm.style = 'margin-top:10px;';
+    addForm.innerHTML = `
+      <div><input type="text" class="newCatInput" placeholder="Nueva categoría de ${tipo.toLowerCase()}"></div>
+      <div><button class="btn" data-addcat="${tipo}">Agregar categoría</button></div>
+    `;
+    card.appendChild(addForm);
+    wrap.appendChild(card);
+  });
+
+  const saveBar = document.createElement('div');
+  saveBar.style = 'position:sticky;bottom:0;padding:12px 0 4px;background:var(--bg);';
+  saveBar.innerHTML = `<button class="btn" id="saveBudgetsBtn" style="width:100%;background:var(--green);font-size:0.95rem;padding:13px;">Guardar</button>`;
+  wrap.appendChild(saveBar);
+  app.appendChild(wrap);
+
+  function collectBudgetInputs(){
+    wrap.querySelectorAll('[data-budget]').forEach(inp=>{
+      const c = state.categories.find(c=>c.id===inp.dataset.budget);
+      if(c) c.presupuesto = parseAmount(inp.value);
+    });
+    wrap.querySelectorAll('[data-subbudget]').forEach(inp=>{
+      const [catId, subName] = inp.dataset.subbudget.split('|');
+      const c = state.categories.find(c=>c.id===catId);
+      if(c){
+        if(!c.subPresupuestos) c.subPresupuestos = {};
+        c.subPresupuestos[subName] = parseAmount(inp.value);
+      }
+    });
+  }
+
+  document.getElementById('saveBudgetsBtn').onclick = async ()=>{
+    collectBudgetInputs();
+    const btn = document.getElementById('saveBudgetsBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="d-spinner">D</span>&nbsp; Guardando…';
+    const result = await saveState();
+    if(result.cloud) showToast('✅ Presupuestos guardados (sincronizado)');
+    else if(result.error) showToast('⚠️ Guardado en este dispositivo. No se pudo sincronizar con la nube.');
+    else showToast('✅ Presupuestos guardados en este dispositivo');
+    render();
+  };
+
+  wrap.querySelectorAll('[data-addcat]').forEach(btn=>{
+    btn.onclick = ()=>{
+      collectBudgetInputs();
+      const input = btn.parentElement.parentElement.querySelector('.newCatInput');
+      const val = input.value.trim();
+      if(!val) return;
+      const tipo = btn.dataset.addcat;
+      if(getCategory(tipo,val)){ showToast('Esa categoría ya existe'); return; }
+      state.categories.push({id:uid('cat'), tipo, nombre:val, subcategorias:[], presupuesto:0, subPresupuestos:{}});
+      saveState().then(result=>{
+        if(result && result.cloud===false && result.error) showToast('⚠️ Se guardó localmente; no se pudo sincronizar.');
+        else showToast('✅ Categoría agregada');
+      });
+      render();
+    };
+  });
+}
+
+/* ================= SUBIR EXTRACTO ================= */
+function renderSubir(app){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <h3 class="cat-title">Subir extracto bancario</h3>
+    <p style="color:var(--muted);font-size:0.85rem;">Formato soportado: extracto BNB en Excel (.xls/.xlsx) o CSV. Sube el archivo tal como lo descargas de tu banco.</p>
+    <div class="upload-drop" id="dropZone">
+      📂 Toca para elegir el archivo de tu extracto<br><span style="font-size:0.75rem;">.xlsx, .xls o .csv</span>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden">
+    <div id="uploadResult" style="margin-top:14px;"></div>
+  `;
+  wrap.appendChild(card);
+  app.appendChild(wrap);
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  dropZone.onclick = ()=>fileInput.click();
+  fileInput.onchange = (e)=>{
+    if(e.target.files.length) handleFile(e.target.files[0]);
+  };
+}
+
+function handleFile(file){
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    try{
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, {type:'array', cellDates:false});
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+      processBankRows(rows);
+    }catch(err){
+      document.getElementById('uploadResult').innerHTML = `<div class="alert danger">No se pudo leer el archivo: ${err.message}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function findHeaderRow(rows){
+  for(let i=0;i<Math.min(rows.length,10);i++){
+    const rowNorm = rows[i].map(c=>normalize(c));
+    if(rowNorm.includes('fecha') && (rowNorm.some(c=>c.includes('debito')) || rowNorm.some(c=>c.includes('credito')) || rowNorm.some(c=>c.includes('descripcion')))){
+      return i;
+    }
+  }
+  return -1;
+}
+
+function colIndex(headerRow, ...names){
+  const norm = headerRow.map(c=>normalize(c));
+  for(const name of names){
+    const idx = norm.findIndex(c=>c.includes(normalize(name)));
+    if(idx>=0) return idx;
+  }
+  return -1;
+}
+
+function parseAmount(v){
+  if(v===''||v==null) return 0;
+  if(typeof v === 'number') return v;
+  let s = String(v).trim().replace(/[^\d.,-]/g,'');
+  if(s.includes(',') && s.includes('.')){
+    s = s.replace(/\./g,'').replace(',','.');
+  } else if(s.includes(',') && !s.includes('.')){
+    s = s.replace(',','.');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function parseDate(v){
+  if(!v) return '';
+  if(typeof v === 'number'){
+    const d = XLSX.SSF.parse_date_code(v);
+    if(d) return d.y+'-'+String(d.m).padStart(2,'0')+'-'+String(d.d).padStart(2,'0');
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if(m){
+    return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  }
+  const m2 = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m2) return m2[0];
+  return s;
+}
+
+function matchRules(text){
+  const norm = normalize(text);
+  let best = null;
+  let bestLen = 0;
+  state.rules.forEach(r=>{
+    if(norm.includes(r.keyword) && r.keyword.length>bestLen){
+      best = r; bestLen = r.keyword.length;
+    }
+  });
+  return best;
+}
+
+function processBankRows(rows){
+  const headerIdx = findHeaderRow(rows);
+  const resultDiv = document.getElementById('uploadResult');
+  if(headerIdx===-1){
+    resultDiv.innerHTML = '<div class="alert danger">No reconozco el formato de este archivo. Verifica que sea el extracto tal como lo exporta tu banco.</div>';
+    return;
+  }
+  const header = rows[headerIdx];
+  const iFecha = colIndex(header,'fecha');
+  const iDesc = colIndex(header,'descripcion');
+  const iDebito = colIndex(header,'debito');
+  const iCredito = colIndex(header,'credito');
+  const iCodigo = colIndex(header,'codigo de transaccion','codigo');
+  const iAdicional = colIndex(header,'adicionales','adicional');
+
+  let imported=0, autoCat=0, pendientes=0, duplicadas=0;
+  const existingRefs = new Set(state.transactions.map(t=>t.refId).filter(Boolean));
+
+  for(let i=headerIdx+1;i<rows.length;i++){
+    const row = rows[i];
+    if(!row || row.every(c=>c==='')) continue;
+    const fecha = parseDate(row[iFecha]);
+    if(!fecha) continue;
+    const debito = iDebito>=0 ? parseAmount(row[iDebito]) : 0;
+    const credito = iCredito>=0 ? parseAmount(row[iCredito]) : 0;
+    if(debito===0 && credito===0) continue;
+    const tipo = debito>0 ? 'Gasto' : 'Ingreso';
+    const monto = debito>0 ? debito : credito;
+    const descBase = iDesc>=0 ? String(row[iDesc]||'') : '';
+    let extra = iAdicional>=0 ? String(row[iAdicional]||'') : '';
+    const datoMatch = extra.match(/Dato Adicional:\s*(.+)$/i);
+    if(datoMatch) extra = datoMatch[1];
+    const fullText = (descBase+' '+extra).trim();
+    const refId = iCodigo>=0 ? String(row[iCodigo]||'') : (fecha+'|'+fullText+'|'+monto);
+
+    if(refId && existingRefs.has(refId)){ duplicadas++; continue; }
+    if(refId) existingRefs.add(refId);
+
+    const rule = matchRules(fullText);
+    const tx = {
+      id: uid('tx'),
+      fecha, descripcion: fullText || descBase || '(sin descripción)',
+      monto, tipo,
+      categoria: rule ? rule.categoria : null,
+      subcategoria: rule ? rule.subcategoria : null,
+      cuenta: 'BNB',
+      origen: 'extracto',
+      estado: rule ? 'categorizado' : 'pendiente',
+      refId
+    };
+    state.transactions.push(tx);
+    imported++;
+    if(rule) autoCat++; else pendientes++;
+  }
+
+  saveState();
+  resultDiv.innerHTML = `
+    <div class="alert ok">✅ ${imported} transacción(es) importadas.</div>
+    ${autoCat>0?`<div class="alert ok">🏷️ ${autoCat} categorizadas automáticamente.</div>`:''}
+    ${pendientes>0?`<div class="alert warn">❓ ${pendientes} necesitan que elijas categoría (ve a la pestaña Pendientes).</div>`:''}
+    ${duplicadas>0?`<div class="alert warn">↩️ ${duplicadas} ya existían y se omitieron (evitando duplicados).</div>`:''}
+  `;
+  renderNav();
+}
+
+/* Confirmación reutilizable con espera de 10 segundos */
+function showTimedDeleteConfirm({title,message,detail,confirmText='Eliminar'}){
+  return new Promise(resolve=>{
+    const overlay=document.createElement('div');
+    overlay.className='modal-overlay';
+    overlay.innerHTML=`
+      <div class="modal" style="max-width:460px;">
+        <h3>${title}</h3>
+        <p>${message}</p>
+        ${detail?`<p style="color:var(--muted);font-size:.86rem;">${detail}</p>`:''}
+        <div id="timedDeleteCountdown" class="alert warn" style="text-align:center;margin:14px 0;">Debes esperar 10 segundos para confirmar.</div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn" id="timedDeleteCancel">Cancelar</button>
+          <button class="btn danger" id="timedDeleteConfirm" disabled>${confirmText} (10)</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    let remaining=10;
+    const cancel=()=>{clearInterval(timer);overlay.remove();resolve(false);};
+    document.getElementById('timedDeleteCancel').onclick=cancel;
+    const confirm=document.getElementById('timedDeleteConfirm');
+    const timer=setInterval(()=>{
+      remaining--;
+      if(remaining<=0){
+        clearInterval(timer);
+        confirm.disabled=false;
+        confirm.textContent=confirmText;
+        document.getElementById('timedDeleteCountdown').textContent='Ya puedes confirmar la eliminación.';
+      }else{
+        confirm.textContent=`${confirmText} (${remaining})`;
+      }
+    },1000);
+    confirm.onclick=()=>{clearInterval(timer);overlay.remove();resolve(true);};
+  });
+}
+
+/* ================= BACKUP ================= */
+function renderBackup(app){
+  const wrap = document.createElement('div');
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <h3 class="cat-title">Copia de seguridad</h3>
+    <p style="color:var(--muted);font-size:0.85rem;">
+      Descarga una copia completa de los datos disponibles en esta aplicación.
+    </p>
+    <div id="backupStatus" style="margin:10px 0;"></div>
+    <button class="btn" id="downloadBtn">Descargar copia (JSON)</button>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+    <label>Restaurar desde archivo</label>
+    <input type="file" id="restoreInput" accept=".json">
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+    <button class="btn danger" id="resetBtn">Borrar todos los datos</button>
+  `;
+  wrap.appendChild(card);
+  app.appendChild(wrap);
+
+  const status = (msg, ok=false) => {
+    const el=document.getElementById('backupStatus');
+    el.innerHTML = msg ? `<div class="alert ${ok?'ok':'warn'}">${msg}</div>` : '';
+  };
+
+  // Descarga robusta: genera el JSON desde el estado actual y mantiene el archivo
+  // aunque el navegador tarde en procesar la descarga.
+  document.getElementById('downloadBtn').onclick = ()=>{
+    const btn=document.getElementById('downloadBtn');
+    btn.disabled=true;
+    btn.textContent='Preparando copia…';
+    status('');
+
+    try{
+      const backup = {
+        version: 1,
+        created_at: new Date().toISOString(),
+        source: 'Mi Asistente Financiero',
+        data: state
+      };
+
+      const json = JSON.stringify(backup, null, 2);
+      const blob = new Blob([json], {type:'application/json'});
+      const filename = 'mi-asistente-financiero-backup-' + new Date().toISOString().slice(0,10) + '.json';
+
+      /*
+       * IMPORTANTE:
+       * La aplicación se está ejecutando como file://.
+       * No usamos showSaveFilePicker aquí porque su rechazo asíncrono
+       * puede hacer que el navegador pierda el permiso de descarga
+       * iniciado por el clic del usuario.
+       *
+       * Usamos directamente el mecanismo estándar de descarga del
+       * navegador, iniciado sincrónicamente dentro del onclick.
+       */
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.setAttribute('download', filename);
+      a.style.position='fixed';
+      a.style.left='-9999px';
+      document.body.appendChild(a);
+
+      // El clic ocurre directamente dentro de la acción del usuario.
+      a.click();
+
+      // No revocamos inmediatamente el Blob: dejamos tiempo al navegador.
+      setTimeout(()=>{
+        try{
+          a.remove();
+          URL.revokeObjectURL(url);
+        }catch(e){}
+      }, 10000);
+
+      status('Copia descargada. Revisa la carpeta Descargas de tu navegador.', true);
+    }catch(err){
+      console.error('Error descargando backup:', err);
+      status('No se pudo generar la copia de seguridad: '+(err.message||err), false);
+    }finally{
+      btn.disabled=false;
+      btn.textContent='Descargar copia (JSON)';
+    }
+  };
+
+  document.getElementById('restoreInput').onchange = (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev)=>{
+      try{
+        const raw = JSON.parse(ev.target.result);
+        const parsed = raw && raw.data ? raw.data : raw;
+        if(!parsed || !Array.isArray(parsed.categories) || !Array.isArray(parsed.transactions)) throw new Error('Archivo inválido');
+        state = parsed;
+        saveLocal();
+        // La restauración completa a la nube se hará de forma controlada por la
+        // capa de sincronización existente, sin borrar tablas automáticamente.
+        if(currentUser){
+          const result = await saveState();
+          if(!result || !result.cloud) throw new Error(result?.error || 'No se pudo sincronizar');
+        }
+        showToast('Datos restaurados');
+        currentTab = 'dashboard';
+        render();
+      }catch(err){
+        console.error('Error restaurando backup:',err);
+        showToast('No se pudo restaurar el archivo de respaldo');
+      }finally{
+        e.target.value='';
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  document.getElementById('resetBtn').onclick = async ()=>{
+    const btn=document.getElementById('resetBtn');
+    if(!currentUser){
+      showToast('Debes iniciar sesión para borrar los datos.');
+      return;
+    }
+
+    const ok = await showTimedDeleteConfirm({
+      title:'Borrar todos los datos',
+      message:'Se eliminarán de forma permanente todas tus categorías, subcategorías, reglas, presupuestos y transacciones de esta cuenta. Esta acción no se puede deshacer.',
+      detail:'Las credenciales de acceso NO se eliminan.',
+      confirmText:'Borrar todos los datos'
+    });
+    if(!ok) return;
+
+    btn.disabled=true;
+    btn.textContent='Borrando…';
+    try{
+      // Orden seguro respetando las relaciones: primero tablas hijas y luego categorías.
+      const tables=['presupuestos','reglas_categorizacion','transacciones','subcategorias','categorias'];
+      for(const table of tables){
+        const {error}=await supabaseClient.from(table).delete().eq('usuario_id',currentUser.id);
+        if(error) throw error;
+      }
+      state={categories:[],transactions:[],rules:[],budgets:{}};
+      saveLocal();
+      cloudActive=true;
+      showToast('Todos los datos fueron eliminados');
+      currentTab='dashboard';
+      render();
+    }catch(err){
+      console.error('Error borrando todos los datos:',err);
+      showToast('No se pudieron borrar todos los datos de la nube');
+    }finally{
+      btn.disabled=false;
+      btn.textContent='Borrar todos los datos';
+    }
+  };
+}
+
+/* ================= AUTH / INIT ================= */
+function showLoginMessage(msg, error=false){
+  const el=document.getElementById('loginMsg'); el.textContent=msg||''; el.style.color=error?'var(--red)':'var(--muted)';
+}
+async function handleLogin(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const password=document.getElementById('loginPassword').value;
+  const btn=document.getElementById('loginBtn');
+  if(!email||!password){showLoginMessage('Ingresa correo y contraseña.',true);return;}
+  btn.disabled=true; btn.textContent='Ingresando…'; showLoginMessage('');
+  const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
+  if(error){showLoginMessage('No se pudo iniciar sesión. Revisa tus datos.',true);btn.disabled=false;btn.textContent='🔐 Iniciar sesión';return;}
+  currentUser=data.user;
+  console.log('Supabase sesión activa:', currentUser.id);
+  document.getElementById('authGate').style.display='none';
+  document.getElementById('logoutBtn').style.display='inline-block';
+  await initApp();
+  btn.disabled=false;
+  btn.textContent='🔐 Iniciar sesión';
+}
+
+document.getElementById('loginBtn').onclick=handleLogin;
+document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')handleLogin();});
+document.getElementById('logoutBtn').onclick=async()=>{
+  const btn=document.getElementById('logoutBtn');
+  btn.disabled=true;
+  btn.textContent='Saliendo…';
+
+  // Para un HTML abierto como file://, usamos cierre local de sesión.
+  // Así no dejamos la interfaz bloqueada esperando una respuesta de red.
+  try{
+    const {error}=await supabaseClient.auth.signOut({scope:'local'});
+    if(error) console.warn('Logout local:',error);
+  }catch(e){
+    console.warn('Logout:',e);
+  }
+
+  currentUser=null;
+  document.getElementById('app').innerHTML='';
+  document.getElementById('tabNav').innerHTML='';
+  document.getElementById('logoutBtn').style.display='none';
+  document.getElementById('logoutBtn').disabled=false;
+  document.getElementById('logoutBtn').textContent='Cerrar sesión';
+  document.getElementById('authGate').style.display='flex';
+  document.getElementById('loginPassword').value='';
+  document.getElementById('loginEmail').focus();
+  showLoginMessage('Sesión cerrada.');
+};
+
+(async()=>{
+  const {data}=await supabaseClient.auth.getSession();
+  if(data.session){
+    currentUser=data.session.user;
+    document.getElementById('authGate').style.display='none';
+    document.getElementById('logoutBtn').style.display='inline-block';
+    await initApp();
+  } else {
+    document.getElementById('authGate').style.display='flex';
+  }
+  supabaseClient.auth.onAuthStateChange((event,session)=>{
+    if(event==='SIGNED_OUT'){document.getElementById('authGate').style.display='flex';document.getElementById('logoutBtn').style.display='none';}
+  });
+})();
+</script>
+</body>
+</html>
