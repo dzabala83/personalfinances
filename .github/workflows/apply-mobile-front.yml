@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Patch index
-        run: python3 -c "import base64;exec(base64.b64decode('ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKcD1QYXRoKCJpbmRleC5odG1sIikKcD1wLnJlYWQudGV4dCBlbmNvZGluZz0idXRmLTgiKQ=='))"
+        run: python3 -c "import base64;exec(base64.b64decode('ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKcD1QYXRoKCJpbmRleC5odG1sIikKcD1wLnJlYWQudGV4dCBlbmNvZGluZz0idXRmLTgiKQppZiAnZGF0YS1tb2JpbGUtZWRpdCcgaW4gcyBhbmQgJ3R4LW1vYmlsZS1wb2xpc2gtdjInIGluIHM6CiAgICBwcmludCgnRmluYWwgbW9iaWxlIFVJIGFscmVhZHkgYXBwbGllZCcpCiAgICByYWlzZSBTeXN0ZW1FeGl0KDApCg==' ))"
       - name: Validate
         run: "grep -q 'tx-mobile-list' index.html && grep -q 'data-mobile-edit' index.html && grep -q 'data-mobile-del' index.html"
       - name: Commit
