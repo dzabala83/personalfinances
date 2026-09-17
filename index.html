@@ -151,31 +151,45 @@ canvas{max-height:260px;}
   .search-wide{grid-column:span 2;}
   @media(max-width:600px){.search-wide{grid-column:span 1;}}
 
-/* ===== Vista móvil de transacciones ===== */
+/* ===== Vista móvil de transacciones — tarjetas ===== */
 .tx-mobile-list{display:none;}
-.tx-mobile-card{border:1px solid var(--border);border-radius:14px;padding:13px;margin-bottom:9px;background:var(--card);}
-.tx-mobile-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
-.tx-mobile-desc{font-weight:700;font-size:.92rem;line-height:1.3;overflow-wrap:anywhere;}
-.tx-mobile-date{font-size:.73rem;color:var(--muted);margin-top:4px;}
-.tx-mobile-amount{font-size:1rem;font-weight:800;white-space:nowrap;}
+.tx-mobile-card{border:1px solid var(--border);border-radius:16px;padding:14px 12px;margin:0 0 10px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.03);}
+.tx-mobile-main{display:grid;grid-template-columns:48px 54px minmax(0,1fr) auto;gap:10px;align-items:center;}
+.tx-mobile-icon{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.15rem;background:var(--red-soft);color:var(--red);font-weight:800;}
+.tx-mobile-card.ingreso .tx-mobile-icon{background:var(--green-soft);color:var(--green);}
+.tx-mobile-datebox{width:54px;padding:6px 3px;border-radius:10px;background:var(--bg);text-align:center;font-weight:800;line-height:1.05;}
+.tx-mobile-datebox .mon{font-size:.65rem;color:var(--muted);text-transform:uppercase;}
+.tx-mobile-datebox .day{font-size:1.05rem;margin-top:2px;}
+.tx-mobile-info{min-width:0;}
+.tx-mobile-desc{font-weight:750;font-size:.88rem;line-height:1.25;overflow-wrap:anywhere;}
+.tx-mobile-sub{font-size:.75rem;color:var(--muted);margin-top:4px;overflow-wrap:anywhere;}
+.tx-mobile-amount{font-size:1rem;font-weight:800;white-space:nowrap;align-self:start;padding-top:2px;}
 .tx-mobile-amount.gasto{color:var(--red);}
 .tx-mobile-amount.ingreso{color:var(--green);}
-.tx-mobile-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap;}
-.tx-mobile-cat{font-size:.76rem;color:var(--muted);overflow-wrap:anywhere;}
-.tx-mobile-actions{display:flex;gap:6px;}
-.tx-mobile-actions button{min-width:36px;min-height:34px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;font-size:.85rem;cursor:pointer;}
-@media(max-width:600px){
-  .tx-desktop-list{display:none!important;}
-  .tx-mobile-list{display:block;}
-  #txListCard{padding:10px;}
-}
+.tx-mobile-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;padding-left:58px;}
+.tx-mobile-cat{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:14px;background:var(--red-soft);color:var(--red);font-size:.73rem;font-weight:700;max-width:65%;overflow-wrap:anywhere;}
+.tx-mobile-card.ingreso .tx-mobile-cat{background:var(--green-soft);color:var(--green);}
+.tx-mobile-actions{display:flex;gap:7px;}
+.tx-mobile-actions button{min-width:40px;min-height:38px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:9px;font-size:1rem;cursor:pointer;}
+.tx-mobile-actions button:active{transform:scale(.96);}
+@media(max-width:600px){.tx-desktop-list{display:none!important;}.tx-mobile-list{display:block;}#txListCard{padding:10px;}#txListCard>.table-wrap{display:none!important;}}
 </style>
 
 <style>
 .d-spinner{display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;line-height:1;animation:d-spin .8s linear infinite;transform-origin:center;}
 @keyframes d-spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 </style>
-</head>
+<style id="tx-mobile-polish-v2">
+          @media(max-width:600px){
+            #txListCard{margin-top:10px;}
+            .search-panel{grid-template-columns:1fr 1fr!important;gap:9px;}
+            .search-panel .search-wide{grid-column:1 / -1;}
+            .search-panel label{font-size:.72rem;}
+            #txSearch{font-size:.9rem;padding:11px 12px;}
+            #filterMonth,#filterTipo,#txCatFilter,#txSubFilter,#txAccountFilter,#txStatusFilter,#txDateFrom,#txDateTo,#txMinAmount,#txMaxAmount{min-height:42px;}
+            #applyTxFilters,#clearTxFilters,#addManualBtn{min-height:44px;}
+          }
+          </style></head>
 <body>
 
 <div id="authGate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;">
@@ -958,9 +972,30 @@ function renderTransacciones(app){
     if(!list.length){card.innerHTML='<div class="empty">No hay transacciones para estos filtros.</div>';return;}
     let html='<div style="font-size:.85rem;color:var(--muted);margin-bottom:8px;">'+list.length+' transacción(es)</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
     list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
-    html+='</tbody></table></div>'; card.innerHTML=html;
-    card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEditTransaction(b.dataset.edit));
-    card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ const tx=state.transactions.find(t=>t.id===b.dataset.del); if(!tx) return; showDeleteTransactionModal(tx, async()=>{ const original=state.transactions.slice(); state.transactions=state.transactions.filter(t=>t.id!==tx.id); const result=await saveState(); if(!result.cloud){ state.transactions=original; throw (result.error||new Error('No se pudo sincronizar con Supabase')); } renderList(); renderNav(); showToast('Transacción eliminada y sincronizada.'); }); });
+    html+='</tbody></table></div>';
+    const mobileList=document.createElement('div');
+    mobileList.className='tx-mobile-list';
+    list.forEach(t=>{
+      const gasto=t.tipo==='Gasto';
+      const d=new Date((t.fecha||'')+'T00:00:00');
+      const monthNames=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+      const mon=Number.isNaN(d.getTime()) ? '' : monthNames[d.getMonth()];
+      const day=Number.isNaN(d.getTime()) ? (t.fecha||'').slice(-2) : String(d.getDate()).padStart(2,'0');
+      const item=document.createElement('div');
+      item.className='tx-mobile-card '+(gasto?'gasto':'ingreso');
+      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
+      item.querySelector('.tx-mobile-desc').textContent=t.descripcion||'Sin descripción';
+      item.querySelector('.tx-mobile-sub').textContent=t.categoria ? (t.categoria+(t.subcategoria?' / '+t.subcategoria:'')) : 'Sin categoría';
+      mobileList.appendChild(item);
+    });
+    card.innerHTML=html;
+    card.appendChild(mobileList);
+    const editHandler=id=>openEditTransaction(id);
+    const deleteHandler=id=>{ const tx=state.transactions.find(t=>t.id===id); if(!tx) return; showDeleteTransactionModal(tx, async()=>{ const original=state.transactions.slice(); state.transactions=state.transactions.filter(t=>t.id!==tx.id); const result=await saveState(); if(!result.cloud){ state.transactions=original; throw (result.error||new Error('No se pudo sincronizar con Supabase')); } renderList(); renderNav(); showToast('Transacción eliminada y sincronizada.'); }); };
+    card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.edit));
+    card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.del));
+    card.querySelectorAll('[data-mobile-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.mobileEdit));
+    card.querySelectorAll('[data-mobile-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.mobileDel));
   }
   ['filterMonth','filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo'].forEach(id=>document.getElementById(id).onchange=renderList);
   ['txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).addEventListener('input',renderList));
@@ -2156,63 +2191,5 @@ document.addEventListener('click', async (event) => {
 }, true);
 </script>
 
-<script>
-/* Mobile transaction cards: keeps the existing desktop table and filter logic intact. */
-(function(){
-  function buildMobileList(card){
-    if(!card || window.innerWidth>600) return;
-    const tableWrap=card.querySelector('.table-wrap');
-    const table=tableWrap && tableWrap.querySelector('table');
-    if(!table) return;
-    const old=card.querySelector('.tx-mobile-list');
-    if(old) old.remove();
-    const mobile=document.createElement('div');
-    mobile.className='tx-mobile-list';
-    const rows=table.querySelectorAll('tbody tr');
-    rows.forEach(row=>{
-      const cells=row.children;
-      if(cells.length<6) return;
-      const desc=cells[1].textContent.trim();
-      const date=cells[0].textContent.trim();
-      const cat=cells[2].textContent.trim() || 'Sin categoría';
-      const tipo=cells[3].textContent.trim();
-      const monto=cells[4].textContent.trim();
-      const actions=cells[5].innerHTML;
-      const gasto=tipo==='Gasto';
-      const item=document.createElement('div');
-      item.className='tx-mobile-card';
-      item.innerHTML='<div class="tx-mobile-top"><div style="min-width:0;"><div class="tx-mobile-desc"></div><div class="tx-mobile-date"></div></div><div class="tx-mobile-amount '+(gasto?'gasto':'ingreso')+'">'+(gasto?'−':'+')+monto.replace(/^Bs\s*/,'')+'</div></div><div class="tx-mobile-meta"><div class="tx-mobile-cat"></div><span class="pill '+(gasto?'gasto':'ingreso')+'"></span><div class="tx-mobile-actions">'+actions+'</div></div>';
-      item.querySelector('.tx-mobile-desc').textContent=desc;
-      item.querySelector('.tx-mobile-date').textContent=date;
-      item.querySelector('.tx-mobile-cat').textContent=cat;
-      item.querySelector('.pill').textContent=tipo;
-      mobile.appendChild(item);
-    });
-    tableWrap.parentNode.insertBefore(mobile,tableWrap.nextSibling);
-  }
-  function sync(){
-    const card=document.getElementById('txListCard');
-    if(card) buildMobileList(card);
-  }
-  let observer;
-  function refreshObserver(){
-    const root=document.getElementById('app');
-    if(!root) return;
-    if(observer) observer.disconnect();
-    observer=new MutationObserver(()=>{
-      observer.disconnect();
-      sync();
-      const current=document.getElementById('app');
-      if(current) observer.observe(current,{childList:true,subtree:true});
-    });
-    observer.observe(root,{childList:true,subtree:true});
-  }
-  window.addEventListener('resize',sync);
-  setTimeout(()=>{
-    sync();
-    refreshObserver();
-  },0);
-})();
-</script>
 </body>
 </html>
