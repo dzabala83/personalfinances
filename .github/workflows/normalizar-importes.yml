@@ -1,0 +1,127 @@
+name: Normalizar importes del extracto
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  normalizar:
+    # Evita que el commit generado por este workflow vuelva a ejecutarlo.
+    if: ${{ !contains(github.event.head_commit.message, 'Normalizar importes BNB') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reemplazar parser de importes
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+
+          pattern = re.compile(r"function parseAmount\(v\)\{.*?\n\}", re.S)
+
+          replacement = r'''function parseAmount(v){
+  // Normalizamos TODOS los importes del extracto antes de guardarlos.
+  // El BNB normalmente entrega números como 4,322.53 (miles=coma, decimal=punto),
+  // mientras otros archivos pueden usar 4.322,53 (miles=punto, decimal=coma).
+  if(v==='' || v==null) return 0;
+
+  // Si Excel ya entregó un número real, no lo reinterpretamos.
+  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
+
+  let s = String(v)
+    .trim()
+    .replace(/\u00A0/g,' ')
+    .replace(/[^\d.,-]/g,'');
+
+  if(!s) return 0;
+
+  const comma = s.lastIndexOf(',');
+  const dot = s.lastIndexOf('.');
+
+  // Si existen ambos separadores, el ÚLTIMO separador se considera decimal.
+  // Ejemplos:
+  // 4,322.53 -> 4322.53
+  // 4.322,53 -> 4322.53
+  if(comma >= 0 && dot >= 0){
+    if(comma > dot){
+      s = s.replace(/\./g,'').replace(',', '.');
+    }else{
+      s = s.replace(/,/g,'');
+    }
+  }
+  // Si solo hay coma, distinguimos decimal de separador de miles.
+  else if(comma >= 0){
+    const parts = s.split(',');
+    const last = parts[parts.length-1];
+    if(parts.length > 2 || last.length === 3){
+      s = parts.join('');
+    }else{
+      s = s.replace(',', '.');
+    }
+  }
+  // Si solo hay punto, distinguimos decimal de separador de miles.
+  else if(dot >= 0){
+    const parts = s.split('.');
+    const last = parts[parts.length-1];
+    if(parts.length > 2 || last.length === 3){
+      s = parts.join('');
+    }
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}'''
+
+          new_text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit('No se encontró exactamente una función parseAmount en index.html')
+
+          path.write_text(new_text, encoding='utf-8')
+          print('Parser de importes actualizado correctamente.')
+
+      - name: Verificar casos BNB
+        shell: python
+        run: |
+          # Extraemos y evaluamos la función dentro de un pequeño entorno Node.
+          import re
+          from pathlib import Path
+          text = Path('index.html').read_text(encoding='utf-8')
+          m = re.search(r"function parseAmount\(v\)\{.*?\n\}", text, re.S)
+          assert m, 'parseAmount no encontrado'
+          fn = m.group(0)
+          cases = {
+              '4,322.53': 4322.53,
+              '1,500.00': 1500.00,
+              '3,874.88': 3874.88,
+              '521.33': 521.33,
+              '4.322,53': 4322.53,
+              '1.500,00': 1500.00,
+              '24,50': 24.50,
+          }
+          script = fn + '\n' + '\n'.join(f"if(parseAmount({value!r}) !== {expected}) throw new Error({value!r} + ' => ' + parseAmount({value!r}));" for value, expected in cases.items())
+          Path('/tmp/test.js').write_text(script, encoding='utf-8')
+
+      - name: Ejecutar pruebas
+        shell: bash
+        run: node /tmp/test.js
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No hay cambios que guardar."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Normalizar importes BNB"
+          git push
