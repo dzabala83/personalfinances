@@ -1,0 +1,42 @@
+name: Mobile transactions UI
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  mobile-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply mobile transaction cards
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          css_marker = 'canvas{max-height:260px;}'
+          css = '''\n/* ===== Vista móvil de transacciones ===== */\n.tx-mobile-list{display:none;}\n.tx-mobile-card{border:1px solid var(--border);border-radius:14px;padding:13px;margin-bottom:9px;background:var(--card);cursor:pointer;}\n.tx-mobile-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}\n.tx-mobile-desc{font-weight:700;font-size:.92rem;line-height:1.3;overflow-wrap:anywhere;}\n.tx-mobile-date{font-size:.73rem;color:var(--muted);margin-top:4px;}\n.tx-mobile-amount{font-size:1rem;font-weight:800;white-space:nowrap;}\n.tx-mobile-amount.gasto{color:var(--red);}\n.tx-mobile-amount.ingreso{color:var(--green);}\n.tx-mobile-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap;}\n.tx-mobile-cat{font-size:.76rem;color:var(--muted);overflow-wrap:anywhere;}\n.tx-mobile-actions{display:flex;gap:6px;}\n.tx-mobile-actions button{min-width:36px;min-height:34px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;font-size:.85rem;cursor:pointer;}\n@media(max-width:600px){\n  .tx-desktop-list{display:none!important;}\n  .tx-mobile-list{display:block;}\n  #txListCard{padding:10px;}\n  #txListCard>div:first-child{padding:3px 4px 8px;}\n}\n'''\n          if css_marker not in s:\n              raise SystemExit('CSS marker not found')\n          if 'tx-mobile-list' not in s:\n              s = s.replace(css_marker, css_marker + css, 1)\n\n          old = """    let html='<div style=\\\"font-size:.85rem;color:var(--muted);margin-bottom:8px;\\\">'+list.length+' transacción(es)</div><div class=\\\"table-wrap\\\"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';\n    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class=\\\"pill ${t.tipo==='Gasto'?'gasto':'ingreso'}\\\">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class=\\\"row-actions\\\"><button data-edit=\\\"${t.id}\\\" title=\\\"Editar\\\">✏️</button><button data-del=\\\"${t.id}\\\" title=\\\"Eliminar\\\">🗑</button></td></tr>`;});\n    html+='</tbody></table></div>'; card.innerHTML=html;"""
+          new = """    let html='<div style=\\\"font-size:.85rem;color:var(--muted);margin-bottom:8px;\\\">'+list.length+' transacción(es)</div>';\n    html+='<div class=\\\"tx-desktop-list\\\"><div class=\\\"table-wrap\\\"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';\n    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class=\\\"pill ${t.tipo==='Gasto'?'gasto':'ingreso'}\\\">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class=\\\"row-actions\\\"><button data-edit=\\\"${t.id}\\\" title=\\\"Editar\\\">✏️</button><button data-del=\\\"${t.id}\\\" title=\\\"Eliminar\\\">🗑</button></td></tr>`;});\n    html+='</tbody></table></div></div>';\n    html+='<div class=\\\"tx-mobile-list\\\">';\n    list.forEach(t=>{\n      const cat=[t.categoria,t.subcategoria].filter(Boolean).join(' · ') || 'Sin categoría';\n      const sign=t.tipo==='Gasto'?'−':'+';\n      html+=`<div class=\\\"tx-mobile-card\\\" data-edit-card=\\\"${t.id}\\\"><div class=\\\"tx-mobile-top\\\"><div style=\\\"min-width:0;\\\"><div class=\\\"tx-mobile-desc\\\">${escapeHtml(t.descripcion||'(sin descripción)')}</div><div class=\\\"tx-mobile-date\\\">${escapeHtml(t.fecha||'')} · ${escapeHtml(t.cuenta||'')}</div></div><div class=\\\"tx-mobile-amount ${t.tipo==='Gasto'?'gasto':'ingreso'}\\\">${sign}${fmtMoney(t.monto).replace('Bs ','')} </div></div><div class=\\\"tx-mobile-meta\\\"><div class=\\\"tx-mobile-cat\\\">${escapeHtml(cat)}</div><span class=\\\"pill ${t.tipo==='Gasto'?'gasto':'ingreso'}\\\">${escapeHtml(t.tipo||'')}</span><div class=\\\"tx-mobile-actions\\\"><button data-edit=\\\"${t.id}\\\" title=\\\"Editar\\\">✏️</button><button data-del=\\\"${t.id}\\\" title=\\\"Eliminar\\\">🗑</button></div></div></div>`;\n    });\n    html+='</div>';\n    card.innerHTML=html;\n    card.querySelectorAll('[data-edit-card]').forEach(c=>c.onclick=(e)=>{ if(e.target.closest('[data-edit],[data-del]')) return; openEditTransaction(c.dataset.editCard); });"""
+          if old not in s:\n              raise SystemExit('transaction HTML marker not found')\n          s = s.replace(old, new, 1)\n          p.write_text(s, encoding='utf-8')\n          print('Mobile transaction UI applied')\n          PY
+
+      - name: Validate
+        run: |
+          grep -q 'tx-mobile-list' index.html
+          grep -q 'tx-desktop-list' index.html
+          node --check <(sed -n '/<script>/,/<\/script>/p' index.html | sed '1d;$d') || true
+
+      - name: Commit
+        run: |
+          if git diff --quiet -- index.html; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'feat: vista móvil de transacciones'
+          git push
