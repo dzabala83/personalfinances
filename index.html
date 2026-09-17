@@ -2191,5 +2191,76 @@ document.addEventListener('click', async (event) => {
 }, true);
 </script>
 
+<script>
+/* MOBILE_TX_FRONT_V3 */
+(function(){
+  function buildMobile(){
+    const card=document.getElementById('txListCard');
+    if(!card || window.innerWidth>600) return;
+    const tableWrap=card.querySelector('.table-wrap');
+    const table=tableWrap && tableWrap.querySelector('table');
+    if(!table) return;
+    let mobile=card.querySelector('.tx-mobile-list');
+    if(mobile) mobile.remove();
+    mobile=document.createElement('div');
+    mobile.className='tx-mobile-list';
+    const rows=table.querySelectorAll('tbody tr');
+    rows.forEach(row=>{
+      const cells=row.children;
+      if(cells.length<6) return;
+      const date=(cells[0].textContent||'').trim();
+      const desc=(cells[1].textContent||'').trim() || 'Sin descripción';
+      const cat=(cells[2].textContent||'').trim() || 'Sin categoría';
+      const tipo=(cells[3].textContent||'').trim();
+      const monto=(cells[4].textContent||'').trim();
+      const gasto=tipo.toLowerCase().includes('gasto');
+      const parts=date.split(/[-\/]/);
+      let day=date, mon='';
+      if(parts.length===3){ day=parts[2]; const names=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']; const m=Number(parts[1]); mon=names[m-1]||''; }
+      const item=document.createElement('div');
+      item.className='tx-mobile-card '+(gasto?'gasto':'ingreso');
+      const main=document.createElement('div'); main.className='tx-mobile-main';
+      const icon=document.createElement('div'); icon.className='tx-mobile-icon'; icon.textContent=gasto?'↑':'↓';
+      const dateBox=document.createElement('div'); dateBox.className='tx-mobile-datebox';
+      dateBox.innerHTML='<div class="mon"></div><div class="day"></div>';
+      dateBox.querySelector('.mon').textContent=mon; dateBox.querySelector('.day').textContent=day;
+      const info=document.createElement('div'); info.className='tx-mobile-info';
+      const d=document.createElement('div'); d.className='tx-mobile-desc'; d.textContent=desc;
+      const sub=document.createElement('div'); sub.className='tx-mobile-sub'; sub.textContent=cat;
+      info.append(d,sub);
+      const amount=document.createElement('div'); amount.className='tx-mobile-amount '+(gasto?'gasto':'ingreso'); amount.textContent=(gasto?'−':'+')+monto;
+      main.append(icon,dateBox,info,amount);
+      const bottom=document.createElement('div'); bottom.className='tx-mobile-bottom';
+      const catEl=document.createElement('div'); catEl.className='tx-mobile-cat'; catEl.textContent='🏷️ '+cat;
+      const actions=document.createElement('div'); actions.className='tx-mobile-actions';
+      const originals=cells[5].querySelectorAll('button');
+      originals.forEach((orig,index)=>{
+        const b=document.createElement('button'); b.type='button'; b.textContent=index===0?'✏️':'🗑️'; b.title=index===0?'Editar':'Eliminar';
+        b.addEventListener('click',()=>orig.click()); actions.appendChild(b);
+      });
+      bottom.append(catEl,actions);
+      item.append(main,bottom); mobile.appendChild(item);
+    });
+    tableWrap.insertAdjacentElement('afterend',mobile);
+  }
+  let timer=null;
+  function schedule(){
+    clearTimeout(timer); timer=setTimeout(buildMobile,40);
+  }
+  function init(){
+    const card=document.getElementById('txListCard');
+    if(!card) return;
+    buildMobile();
+    const tableWrap=card.querySelector('.table-wrap');
+    if(tableWrap){ new MutationObserver(schedule).observe(tableWrap,{childList:true,subtree:true,characterData:true}); }
+    window.addEventListener('resize',schedule);
+    document.addEventListener('click',function(e){
+      const b=e.target.closest && e.target.closest('#txListCard button');
+      if(b) schedule();
+    },true);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+})();
+</script>
 </body>
 </html>
