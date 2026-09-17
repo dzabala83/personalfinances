@@ -611,6 +611,12 @@ function getCategory(tipo, nombre){
 let currentTab = 'dashboard';
 let currentMonth = todayKey();
 
+// Filtros de transacciones: se conservan al editar/guardar una transacción.
+let txFilterState = {
+  month: null, tipo: '', search: '', cat: '', sub: '', account: '', status: '',
+  from: '', to: '', min: '', max: ''
+};
+
 // Runs once state (local or cloud) is ready: jumps to the most recent month with data.
 function finishInit(){
   const months = state.transactions.map(t=>monthKey(t.fecha)).filter(Boolean).sort();
@@ -864,8 +870,11 @@ function renderTransacciones(app){
       <div class="field"><label>Monto mínimo</label><input type="text" inputmode="decimal" id="txMinAmount" placeholder="0"></div>
       <div class="field"><label>Monto máximo</label><input type="text" inputmode="decimal" id="txMaxAmount" placeholder="0"></div>
     </div>
-    <button class="btn secondary" id="clearTxFilters" style="margin-top:12px;">Limpiar filtros</button>
-    <button class="btn secondary" id="addManualBtn" style="margin-top:8px;">+ Agregar transacción manual</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+      <button class="btn" id="applyTxFilters" style="flex:1;min-width:170px;">✓ Aplicar y conservar filtros</button>
+      <button class="btn secondary" id="clearTxFilters" style="flex:1;min-width:140px;">Limpiar filtros</button>
+    </div>
+    <button class="btn secondary" id="addManualBtn" style="margin-top:8px;width:100%;">+ Agregar transacción manual</button>
   `;
   wrap.appendChild(controls);
   const listCard = document.createElement('div'); listCard.className='card'; listCard.id='txListCard'; wrap.appendChild(listCard); app.appendChild(wrap);
@@ -881,7 +890,36 @@ function renderTransacciones(app){
   }
   fillFilterOptions();
 
+  // Recuperamos los filtros guardados para que no se pierdan al renderizar
+  // después de editar, eliminar o guardar una transacción.
+  const saved = txFilterState;
+  if(saved.month) document.getElementById('filterMonth').value=saved.month;
+  if(saved.tipo) document.getElementById('filterTipo').value=saved.tipo;
+  document.getElementById('txSearch').value=saved.search||'';
+  document.getElementById('txCatFilter').value=saved.cat||'';
+  document.getElementById('txSubFilter').value=saved.sub||'';
+  document.getElementById('txAccountFilter').value=saved.account||'';
+  document.getElementById('txStatusFilter').value=saved.status||'';
+  document.getElementById('txDateFrom').value=saved.from||'';
+  document.getElementById('txDateTo').value=saved.to||'';
+  document.getElementById('txMinAmount').value=saved.min||'';
+  document.getElementById('txMaxAmount').value=saved.max||'';
+
   function renderList(){
+    // Guardamos siempre el estado actual de los filtros antes de renderizar.
+    txFilterState = {
+      month: document.getElementById('filterMonth').value || currentMonth,
+      tipo: document.getElementById('filterTipo').value,
+      search: document.getElementById('txSearch').value,
+      cat: document.getElementById('txCatFilter').value,
+      sub: document.getElementById('txSubFilter').value,
+      account: document.getElementById('txAccountFilter').value,
+      status: document.getElementById('txStatusFilter').value,
+      from: document.getElementById('txDateFrom').value,
+      to: document.getElementById('txDateTo').value,
+      min: document.getElementById('txMinAmount').value,
+      max: document.getElementById('txMaxAmount').value
+    };
     const m=document.getElementById('filterMonth').value; currentMonth=m||currentMonth;
     const tipo=document.getElementById('filterTipo').value;
     const q=normalize(document.getElementById('txSearch').value||'');
@@ -907,7 +945,16 @@ function renderTransacciones(app){
   }
   ['filterMonth','filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo'].forEach(id=>document.getElementById(id).onchange=renderList);
   ['txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).addEventListener('input',renderList));
-  document.getElementById('clearTxFilters').onclick=()=>{document.getElementById('filterMonth').value=currentMonth;['filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo','txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');renderList();};
+  document.getElementById('clearTxFilters').onclick=()=>{
+    document.getElementById('filterMonth').value=currentMonth;
+    ['filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo','txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');
+    txFilterState={month:currentMonth,tipo:'',search:'',cat:'',sub:'',account:'',status:'',from:'',to:'',min:'',max:''};
+    renderList();
+  };
+  document.getElementById('applyTxFilters').onclick=()=>{
+    renderList();
+    showToast('✓ Filtros aplicados y conservados');
+  };
   document.getElementById('addManualBtn').onclick=()=>openManualForm(); renderList();
 }
 
