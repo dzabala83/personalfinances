@@ -2157,16 +2157,16 @@ document.addEventListener('click', async (event) => {
 </script>
 
 <script>
-/* Mobile transaction cards: keeps the existing desktop table and filter logic intact. */
+/* Mobile transaction cards: stable version. */
 (function(){
   function buildMobileList(card){
     if(!card || window.innerWidth>600) return;
     const tableWrap=card.querySelector('.table-wrap');
     const table=tableWrap && tableWrap.querySelector('table');
     if(!table) return;
-    const old=card.querySelector('.tx-mobile-list');
-    if(old) old.remove();
-    const mobile=document.createElement('div');
+    let mobile=card.querySelector('.tx-mobile-list');
+    if(mobile) mobile.remove();
+    mobile=document.createElement('div');
     mobile.className='tx-mobile-list';
     const rows=table.querySelectorAll('tbody tr');
     rows.forEach(row=>{
@@ -2194,24 +2194,23 @@ document.addEventListener('click', async (event) => {
     const card=document.getElementById('txListCard');
     if(card) buildMobileList(card);
   }
-  let observer;
-  function refreshObserver(){
+  function init(){
     const root=document.getElementById('app');
     if(!root) return;
-    if(observer) observer.disconnect();
-    observer=new MutationObserver(()=>{
-      observer.disconnect();
-      sync();
-      const current=document.getElementById('app');
-      if(current) observer.observe(current,{childList:true,subtree:true});
+    let timer=null;
+    const observer=new MutationObserver(function(){
+      clearTimeout(timer);
+      timer=setTimeout(function(){
+        observer.disconnect();
+        sync();
+        observer.observe(root,{childList:true,subtree:true});
+      },50);
     });
     observer.observe(root,{childList:true,subtree:true});
+    window.addEventListener('resize',function(){observer.disconnect();sync();observer.observe(root,{childList:true,subtree:true});});
+    setTimeout(sync,100);
   }
-  window.addEventListener('resize',sync);
-  setTimeout(()=>{
-    sync();
-    refreshObserver();
-  },0);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
 </script>
 </body>
