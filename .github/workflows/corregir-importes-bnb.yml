@@ -1,0 +1,132 @@
+name: Corregir importes BNB
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  corregir:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Corregir parser de importes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''function parseAmount(v){
+  if(v===''||v==null) return 0;
+  if(typeof v === 'number') return v;
+  let s = String(v).trim().replace(/[^\\d.,-]/g,'');
+  if(s.includes(',') && s.includes('.')){
+    s = s.replace(/\\./g,'').replace(',','.');
+  } else if(s.includes(',') && !s.includes('.')){
+    s = s.replace(',','.');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}'''
+
+          new = '''function parseAmount(v){
+  if(v===''||v==null) return 0;
+  if(typeof v === 'number') return v;
+
+  // El extracto BNB puede entregar importes como texto con formato
+  // anglosajón: 4,322.53. En ese formato la coma es miles y el punto
+  // es decimal. También aceptamos el formato latino 4.322,53.
+  let s = String(v).trim().replace(/[^\\d.,-]/g,'');
+  if(!s) return 0;
+
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+
+  if(lastComma >= 0 && lastDot >= 0){
+    // El separador que aparece último se considera decimal.
+    if(lastDot > lastComma){
+      // 4,322.53 -> 4322.53
+      s = s.replace(/,/g,'');
+    }else{
+      // 4.322,53 -> 4322.53
+      s = s.replace(/\\./g,'').replace(',', '.');
+    }
+  }else if(lastComma >= 0){
+    const decimals = s.length - lastComma - 1;
+    if(decimals === 2){
+      // 4322,53 -> 4322.53
+      s = s.replace(/,/g,'.');
+    }else{
+      // 4,322 -> 4322
+      s = s.replace(/,/g,'');
+    }
+  }else if(lastDot >= 0){
+    const decimals = s.length - lastDot - 1;
+    if(decimals !== 2){
+      // 4.322 -> 4322 (miles, cuando no hay dos decimales)
+      s = s.replace(/\\./g,'');
+    }
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}'''
+
+          if old not in text:
+              raise SystemExit('No se encontró el parser original esperado.')
+
+          text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          print('Parser de importes corregido.')
+
+      - name: Verificar casos BNB
+        shell: python
+        run: |
+          cases = {
+              '4,322.53': 4322.53,
+              '1,500.00': 1500.00,
+              '3,874.88': 3874.88,
+              '521.33': 521.33,
+              '24.50': 24.50,
+              '4.322,53': 4322.53,
+              '1.500,00': 1500.00,
+              '4322,53': 4322.53,
+          }
+          for raw, expected in cases.items():
+              s = raw
+              last_comma = s.rfind(',')
+              last_dot = s.rfind('.')
+              if last_comma >= 0 and last_dot >= 0:
+                  if last_dot > last_comma:
+                      s = s.replace(',', '')
+                  else:
+                      s = s.replace('.', '').replace(',', '.')
+              elif last_comma >= 0:
+                  decimals = len(s) - last_comma - 1
+                  s = s.replace(',', '.') if decimals == 2 else s.replace(',', '')
+              elif last_dot >= 0:
+                  decimals = len(s) - last_dot - 1
+                  if decimals != 2:
+                      s = s.replace('.', '')
+              value = float(s)
+              assert abs(value - expected) < 1e-9, (raw, value, expected)
+          print('Todos los casos de importes pasaron la verificación.')
+
+      - name: Guardar cambios
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No hay cambios que guardar."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Corregir importes con separador de miles BNB"
+          git push
