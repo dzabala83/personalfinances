@@ -822,11 +822,6 @@ function renderDashboardMobile(app){
   `;
   wrap.appendChild(monthNav);
 
-  const period=document.createElement('div');
-  period.className='mobile-period';
-  period.innerHTML='<span>Mensual</span><span class="period-chevron">⌄</span>';
-  wrap.appendChild(period);
-
   const summary=document.createElement('div');
   summary.className='mobile-money-card';
   summary.innerHTML=`
@@ -911,9 +906,16 @@ function renderDashboardMobile(app){
       </div>
       <div class="mobile-category-progress"><div class="track"><div class="${pct>=100?'over':pct>=90?'warn':''}" style="width:${Math.min(pct,100)}%"></div></div><b>${Math.round(pct)}%</b></div>
     `;
-    card.onclick=()=>{
-      currentTab='categorias';
-      render();
+    card.onclick=(event)=>{
+      if(event.target.closest('.mobile-category-chevron')){
+        txFilterState={
+          month:null,tipo:'',search:'',cat:x.c.nombre,sub:'',account:'',status:'',
+          from:'',to:'',min:'',max:''
+        };
+        currentTab='transacciones';
+        render();
+        return;
+      }
     };
     list.appendChild(card);
   });
