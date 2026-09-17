@@ -1,0 +1,68 @@
+name: Preserve transaction filters
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add filter persistence and apply check
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          marker = "let currentTab = 'dashboard';\nlet currentMonth = todayKey();"
+          replacement = "let currentTab = 'dashboard';\nlet currentMonth = todayKey();\n\n// Filtros de transacciones: se conservan al editar/guardar una transacción.\nlet txFilterState = {\n  month: null, tipo: '', search: '', cat: '', sub: '', account: '', status: '',\n  from: '', to: '', min: '', max: ''\n};"
+          if marker not in s:
+              raise SystemExit('No se encontró el estado de filtros')
+          s = s.replace(marker, replacement, 1)
+
+          old_controls = '''    <button class="btn secondary" id="clearTxFilters" style="margin-top:12px;">Limpiar filtros</button>\n    <button class="btn secondary" id="addManualBtn" style="margin-top:8px;">+ Agregar transacción manual</button>'''
+          new_controls = '''    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">\n      <button class="btn" id="applyTxFilters" style="flex:1;min-width:170px;">✓ Aplicar y conservar filtros</button>\n      <button class="btn secondary" id="clearTxFilters" style="flex:1;min-width:140px;">Limpiar filtros</button>\n    </div>\n    <button class="btn secondary" id="addManualBtn" style="margin-top:8px;width:100%;">+ Agregar transacción manual</button>'''
+          if old_controls not in s:
+              raise SystemExit('No se encontró el bloque de botones de filtros')
+          s = s.replace(old_controls, new_controls, 1)
+
+          marker2 = '''  fillFilterOptions();\n\n  function renderList(){\n    const m=document.getElementById('filterMonth').value; currentMonth=m||currentMonth;'''
+          replacement2 = '''  fillFilterOptions();\n\n  // Recuperamos los filtros guardados para que no se pierdan al renderizar\n  // después de editar, eliminar o guardar una transacción.\n  const saved = txFilterState;\n  if(saved.month) document.getElementById('filterMonth').value=saved.month;\n  if(saved.tipo) document.getElementById('filterTipo').value=saved.tipo;\n  document.getElementById('txSearch').value=saved.search||'';\n  document.getElementById('txCatFilter').value=saved.cat||'';\n  document.getElementById('txSubFilter').value=saved.sub||'';\n  document.getElementById('txAccountFilter').value=saved.account||'';\n  document.getElementById('txStatusFilter').value=saved.status||'';\n  document.getElementById('txDateFrom').value=saved.from||'';\n  document.getElementById('txDateTo').value=saved.to||'';\n  document.getElementById('txMinAmount').value=saved.min||'';\n  document.getElementById('txMaxAmount').value=saved.max||'';\n\n  function renderList(){\n    // Guardamos siempre el estado actual de los filtros antes de renderizar.\n    txFilterState = {\n      month: document.getElementById('filterMonth').value || currentMonth,\n      tipo: document.getElementById('filterTipo').value,\n      search: document.getElementById('txSearch').value,\n      cat: document.getElementById('txCatFilter').value,\n      sub: document.getElementById('txSubFilter').value,\n      account: document.getElementById('txAccountFilter').value,\n      status: document.getElementById('txStatusFilter').value,\n      from: document.getElementById('txDateFrom').value,\n      to: document.getElementById('txDateTo').value,\n      min: document.getElementById('txMinAmount').value,\n      max: document.getElementById('txMaxAmount').value\n    };\n    const m=document.getElementById('filterMonth').value; currentMonth=m||currentMonth;'''
+          if marker2 not in s:
+              raise SystemExit('No se encontró renderList')
+          s = s.replace(marker2, replacement2, 1)
+
+          old_clear = '''  document.getElementById('clearTxFilters').onclick=()=>{document.getElementById('filterMonth').value=currentMonth;['filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo','txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');renderList();};\n  document.getElementById('addManualBtn').onclick=()=>openManualForm(); renderList();'''
+          new_clear = '''  document.getElementById('clearTxFilters').onclick=()=>{\n    document.getElementById('filterMonth').value=currentMonth;\n    ['filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo','txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');\n    txFilterState={month:currentMonth,tipo:'',search:'',cat:'',sub:'',account:'',status:'',from:'',to:'',min:'',max:''};\n    renderList();\n  };\n  document.getElementById('applyTxFilters').onclick=()=>{\n    renderList();\n    showToast('✓ Filtros aplicados y conservados');\n  };\n  document.getElementById('addManualBtn').onclick=()=>openManualForm(); renderList();'''
+          if old_clear not in s:
+              raise SystemExit('No se encontró clearTxFilters')
+          s = s.replace(old_clear, new_clear, 1)
+
+          p.write_text(s, encoding='utf-8')
+          print('Filter persistence patch applied')
+          PY
+
+      - name: Validate
+        run: |
+          grep -q "let txFilterState" index.html
+          grep -q "applyTxFilters" index.html
+          grep -q "✓ Aplicar y conservar filtros" index.html
+          grep -q "Filtros aplicados y conservados" index.html
+          echo "Filter persistence validation OK"
+
+      - name: Commit patched index
+        run: |
+          if git diff --quiet -- index.html; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'feat: conservar filtros al editar transacciones'
+          git push
