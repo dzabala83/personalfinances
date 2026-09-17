@@ -117,18 +117,88 @@ jobs:
           s=s.replace('</head>',css+'\n</head>',1)
           p.write_text(s,encoding='utf-8')
           PY
+      - name: Fix mobile summary structure
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+
+          # Eliminar el renderizador móvil anterior: generaba primero el Resumen viejo
+          # y luego lo reemplazaba por el nuevo, provocando el parpadeo al desplazarse.
+          s=re.sub(r'<style id="summary-mobile-v1">.*?</style>\s*<script>\s*/\* SUMMARY_MOBILE_V1 \*/.*?</script>', '', s, flags=re.S)
+          s=re.sub(r'<style id="summary-mobile-v1">.*?</style>', '', s, flags=re.S)
+          s=re.sub(r'<script>\s*/\* SUMMARY_MOBILE_V1 \*/.*?</script>', '', s, flags=re.S)
+
+          mobile_fn='''function renderDashboardMobile(app){
+  const wrap=document.createElement('div');
+  const mn=document.createElement('div');
+  mn.className='month-nav';
+  mn.innerHTML=`<button id="prevM">←</button><div class="label">${monthLabel(currentMonth)}</div><button id="nextM">→</button>`;
+  wrap.appendChild(mn);
+  const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
+  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0);
+  const summary=document.createElement('div');
+  summary.className='card summary-mobile-v2';
+  summary.innerHTML=`<div class="summary-stat-v2 income"><div class="summary-icon-v2">↑</div><div class="summary-label-v2">Ingresos</div><div class="summary-value-v2">${fmtMoney(ingresos)}</div></div><div class="summary-stat-v2 expense"><div class="summary-icon-v2">↓</div><div class="summary-label-v2">Gastos</div><div class="summary-value-v2">${fmtMoney(gastos)}</div></div>`;
+  wrap.appendChild(summary);
+  const cats=state.categories.filter(c=>c.tipo==='Gasto').map(c=>{const budget=Number(categoryBudget(c))||0;const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((s,t)=>s+Number(t.monto||0),0);return {c,budget,spent};}).filter(x=>x.spent!==0||x.budget!==0).sort((a,b)=>b.spent-a.spent);
+  const totalBudget=cats.reduce((s,x)=>s+x.budget,0),totalSpent=cats.reduce((s,x)=>s+x.spent,0),remaining=totalBudget-totalSpent,totalPct=totalBudget>0?Math.min(totalSpent/totalBudget*100,100):0;
+  const budgetCard=document.createElement('div');budgetCard.className='card budget-mobile-v2';
+  budgetCard.innerHTML=`<div class="budget-head-v2"><div><div class="budget-title-v2">Presupuesto restante</div><div class="budget-remaining-v2">${fmtMoney(remaining)}</div><div class="budget-total-v2">De un total de ${fmtMoney(totalBudget)}</div></div><button class="budget-action-v2" type="button">Ajustes ›</button></div><div class="budget-progress-v2"><strong>${Math.round(totalPct)}%</strong><div class="budget-track-v2"><div class="budget-fill-v2" style="width:${totalPct}%"></div></div><span>${fmtMoney(totalSpent)}</span></div>`;
+  wrap.appendChild(budgetCard);
+  const title=document.createElement('h2');title.className='summary-section-title-v2';title.innerHTML='<span>Gastos por categoría</span><span>↕ Mayor gasto</span>';wrap.appendChild(title);
+  const list=document.createElement('div');list.className='summary-cat-list-v2';
+  const icons={'Comida':'🍴','Entretenimiento':'🎮','Servicios':'⚙️','Salud':'❤️','Educación':'🎓','Barbería/peluquería':'✂️','Deudas':'💳','Higiene':'🧴','Transporte':'🚕','Auto':'🚗','Iglesia':'⛪','Vivienda':'🏠','Vestimenta':'👕','Otros':'📦','Ayuda':'🤝','Banco':'🏦'};
+  cats.forEach(x=>{const pct=x.budget>0?x.spent/x.budget*100:(x.spent>0?100:0),available=x.budget-x.spent;const card=document.createElement('div');card.className='summary-cat-card-v2';card.innerHTML=`<div class="summary-cat-top-v2"><div class="summary-cat-icon-v2">${icons[x.c.nombre]||'📊'}</div><div><div class="summary-cat-name-v2">${escapeHtml(x.c.nombre)}</div><div class="summary-cat-budget-v2">Presupuesto: ${fmtMoney(x.budget)}</div></div><div class="summary-cat-side-v2"><span>Gastado</span><strong>${fmtMoney(x.spent)}</strong><span>Disponible</span><strong class="${available<0?'negative':''}">${fmtMoney(available)}</strong></div></div><div class="summary-cat-progress-v2"><div class="summary-cat-track-v2"><div class="summary-cat-fill-v2 ${pct>=100?'over':pct>=90?'warn':''}" style="width:${Math.min(pct,100)}%"></div></div><b>${Math.round(pct)}%</b></div>`;list.appendChild(card);});
+  if(!cats.length)list.innerHTML='<div class="empty">Aún no tienes categorías con presupuesto o gastos este mes.</div>';
+  wrap.appendChild(list);app.appendChild(wrap);
+  budgetCard.querySelector('.budget-action-v2').onclick=()=>{if(window.__goBudgetCategories)window.__goBudgetCategories();};
+  document.getElementById('prevM').onclick=()=>{currentMonth=shiftMonth(currentMonth,-1);render();};
+  document.getElementById('nextM').onclick=()=>{currentMonth=shiftMonth(currentMonth,1);render();};
+}
+
+'''
+          if 'function renderDashboardMobile(app)' not in s:
+              s=s.replace('function renderDashboard(app){',mobile_fn+'function renderDashboard(app){',1)
+          needle='function renderDashboard(app){\n  const wrap = document.createElement(\'div\');'
+          repl='function renderDashboard(app){\n  if(window.innerWidth<=600){ renderDashboardMobile(app); return; }\n  const wrap = document.createElement(\'div\');'
+          if needle not in s:
+              raise SystemExit('renderDashboard target not found')
+          s=s.replace(needle,repl,1)
+
+          style='''<style id="summary-mobile-v2">
+@media(max-width:600px){
+.summary-mobile-v2{display:grid!important;grid-template-columns:1fr 1fr;gap:0!important;padding:14px!important;border-radius:18px!important;}
+.summary-stat-v2{padding:7px 10px}.summary-stat-v2:first-child{border-right:1px solid var(--border)}
+.summary-icon-v2{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-bottom:7px}
+.summary-stat-v2.income .summary-icon-v2{background:var(--green-soft);color:var(--green)}.summary-stat-v2.expense .summary-icon-v2{background:var(--red-soft);color:var(--red)}
+.summary-label-v2{font-size:.76rem;color:var(--muted)}.summary-value-v2{font-size:1.28rem;font-weight:800;margin-top:3px}.summary-stat-v2.income .summary-value-v2{color:var(--green)}.summary-stat-v2.expense .summary-value-v2{color:var(--red)}
+.budget-mobile-v2{padding:16px!important;border-radius:18px!important}.budget-head-v2{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.budget-title-v2{font-size:.82rem;color:var(--muted)}.budget-remaining-v2{font-size:1.5rem;font-weight:800;color:var(--accent);margin-top:3px}.budget-total-v2{font-size:.78rem;color:var(--muted);margin-top:4px}.budget-action-v2{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:11px;padding:9px 11px;font-size:.75rem;font-weight:700}.budget-progress-v2{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;margin-top:14px}.budget-progress-v2 strong{font-size:1.05rem;min-width:35px}.budget-progress-v2 span{font-size:.75rem;color:var(--muted);white-space:nowrap}.budget-track-v2{height:11px;border:1px solid var(--border);background:var(--bg);border-radius:10px;overflow:hidden}.budget-fill-v2{height:100%;background:var(--accent);border-radius:10px}
+.summary-section-title-v2{display:flex;justify-content:space-between;align-items:center;margin:20px 2px 10px!important;font-size:1rem!important}.summary-section-title-v2 span:last-child{font-size:.75rem;color:var(--accent)}.summary-cat-list-v2{display:flex;flex-direction:column;gap:9px}.summary-cat-card-v2{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:13px 12px}.summary-cat-top-v2{display:grid;grid-template-columns:42px minmax(0,1fr) 82px;gap:10px;align-items:center}.summary-cat-icon-v2{width:42px;height:42px;border-radius:13px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;font-size:1.15rem}.summary-cat-name-v2{font-size:.92rem;font-weight:800;line-height:1.2}.summary-cat-budget-v2{font-size:.72rem;color:var(--muted);margin-top:3px}.summary-cat-side-v2{text-align:right;font-size:.68rem;color:var(--muted);line-height:1.3}.summary-cat-side-v2 strong{display:block;font-size:.8rem;color:var(--red)}.summary-cat-side-v2 strong:last-child{color:var(--green)}.summary-cat-side-v2 strong.negative{color:var(--red)!important}.summary-cat-progress-v2{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:10px}.summary-cat-track-v2{height:9px;background:var(--bg);border:1px solid var(--border);border-radius:9px;overflow:hidden}.summary-cat-fill-v2{height:100%;background:var(--accent);border-radius:9px}.summary-cat-fill-v2.warn{background:var(--yellow)}.summary-cat-fill-v2.over{background:var(--red)}.summary-cat-progress-v2 b{font-size:.76rem;min-width:34px;text-align:right}
+}
+</style>'''
+          if 'summary-mobile-v2' not in s:s=s.replace('</head>',style+'\n</head>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
       - name: Validate
         run: |
           grep -q 'MOBILE_TX_FRONT_V3' index.html
           grep -q 'tx-mobile-list' index.html
           grep -q 'tx-mobile-actions' index.html
           grep -q 'MOBILE_NAV_SCROLL_FIX_V1' index.html
+          grep -q 'function renderDashboardMobile(app)' index.html
+          grep -q 'summary-mobile-v2' index.html
+          ! grep -q 'SUMMARY_MOBILE_V1' index.html
+          ! grep -q 'summary-mobile-v1' index.html
       - name: Commit
         run: |
           if git diff --quiet -- index.html; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'fix: evitar menú anterior fijo al hacer scroll en móvil'
+          git commit -m 'fix: resumen móvil usa un solo render sin parpadeo'
           git pull --rebase origin main
           git push origin main
