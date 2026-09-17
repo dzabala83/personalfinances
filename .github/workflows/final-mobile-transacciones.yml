@@ -14,88 +14,101 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Apply final mobile cards
+      - name: Apply mobile transaction cards
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
-          if 'data-mobile-edit' in s and 'tx-mobile-polish-v2' in s:
-              print('Final mobile UI already applied')
+          marker='/* MOBILE_TX_FRONT_V3 */'
+          if marker in s:
+              print('Mobile transaction front already installed')
               raise SystemExit(0)
-          old_css=re.compile(r'/\* ===== Vista móvil de transacciones ===== \*/.*?@media\(max-width:600px\)\{.*?#txListCard\{padding:10px;\}\n\}',re.S)
-          new_css='''/* ===== Vista móvil de transacciones — tarjetas ===== */
-          .tx-mobile-list{display:none;}
-          .tx-mobile-card{border:1px solid var(--border);border-radius:16px;padding:14px 12px;margin:0 0 10px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.03);}
-          .tx-mobile-main{display:grid;grid-template-columns:48px 54px minmax(0,1fr) auto;gap:10px;align-items:center;}
-          .tx-mobile-icon{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.15rem;background:var(--red-soft);color:var(--red);font-weight:800;}
-          .tx-mobile-card.ingreso .tx-mobile-icon{background:var(--green-soft);color:var(--green);}
-          .tx-mobile-datebox{width:54px;padding:6px 3px;border-radius:10px;background:var(--bg);text-align:center;font-weight:800;line-height:1.05;}
-          .tx-mobile-datebox .mon{font-size:.65rem;color:var(--muted);text-transform:uppercase;}
-          .tx-mobile-datebox .day{font-size:1.05rem;margin-top:2px;}
-          .tx-mobile-info{min-width:0;}
-          .tx-mobile-desc{font-weight:750;font-size:.88rem;line-height:1.25;overflow-wrap:anywhere;}
-          .tx-mobile-sub{font-size:.75rem;color:var(--muted);margin-top:4px;overflow-wrap:anywhere;}
-          .tx-mobile-amount{font-size:1rem;font-weight:800;white-space:nowrap;align-self:start;padding-top:2px;}
-          .tx-mobile-amount.gasto{color:var(--red);}
-          .tx-mobile-amount.ingreso{color:var(--green);}
-          .tx-mobile-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;padding-left:58px;}
-          .tx-mobile-cat{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:14px;background:var(--red-soft);color:var(--red);font-size:.73rem;font-weight:700;max-width:65%;overflow-wrap:anywhere;}
-          .tx-mobile-card.ingreso .tx-mobile-cat{background:var(--green-soft);color:var(--green);}
-          .tx-mobile-actions{display:flex;gap:7px;}
-          .tx-mobile-actions button{min-width:40px;min-height:38px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:9px;font-size:1rem;cursor:pointer;}
-          .tx-mobile-actions button:active{transform:scale(.96);}
-          @media(max-width:600px){.tx-desktop-list{display:none!important;}.tx-mobile-list{display:block;}#txListCard{padding:10px;}#txListCard>.table-wrap{display:none!important;}}'''
-          if not old_css.search(s): raise SystemExit('mobile CSS marker not found')
-          s=old_css.sub(new_css,s,count=1)
-          s=re.sub(r'\n<script>\n/\* Mobile transaction cards:.*?</script>\n(?=</body>)','\n',s,flags=re.S)
-          needle="html+='</tbody></table></div>'; card.innerHTML=html;"
-          replacement='''html+='</tbody></table></div>';
-              const mobileList=document.createElement('div');
-              mobileList.className='tx-mobile-list';
-              list.forEach(t=>{
-                const gasto=t.tipo==='Gasto';
-                const d=new Date((t.fecha||'')+'T00:00:00');
-                const monthNames=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-                const mon=Number.isNaN(d.getTime()) ? '' : monthNames[d.getMonth()];
-                const day=Number.isNaN(d.getTime()) ? (t.fecha||'').slice(-2) : String(d.getDate()).padStart(2,'0');
+          script=r'''<script>
+          /* MOBILE_TX_FRONT_V3 */
+          (function(){
+            function buildMobile(){
+              const card=document.getElementById('txListCard');
+              if(!card || window.innerWidth>600) return;
+              const tableWrap=card.querySelector('.table-wrap');
+              const table=tableWrap && tableWrap.querySelector('table');
+              if(!table) return;
+              let mobile=card.querySelector('.tx-mobile-list');
+              if(mobile) mobile.remove();
+              mobile=document.createElement('div');
+              mobile.className='tx-mobile-list';
+              const rows=table.querySelectorAll('tbody tr');
+              rows.forEach(row=>{
+                const cells=row.children;
+                if(cells.length<6) return;
+                const date=(cells[0].textContent||'').trim();
+                const desc=(cells[1].textContent||'').trim() || 'Sin descripción';
+                const cat=(cells[2].textContent||'').trim() || 'Sin categoría';
+                const tipo=(cells[3].textContent||'').trim();
+                const monto=(cells[4].textContent||'').trim();
+                const gasto=tipo.toLowerCase().includes('gasto');
+                const parts=date.split(/[-\/]/);
+                let day=date, mon='';
+                if(parts.length===3){ day=parts[2]; const names=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC']; const m=Number(parts[1]); mon=names[m-1]||''; }
                 const item=document.createElement('div');
                 item.className='tx-mobile-card '+(gasto?'gasto':'ingreso');
-                item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
-                item.querySelector('.tx-mobile-desc').textContent=t.descripcion||'Sin descripción';
-                item.querySelector('.tx-mobile-sub').textContent=t.categoria ? (t.categoria+(t.subcategoria?' / '+t.subcategoria:'')) : 'Sin categoría';
-                mobileList.appendChild(item);
+                const main=document.createElement('div'); main.className='tx-mobile-main';
+                const icon=document.createElement('div'); icon.className='tx-mobile-icon'; icon.textContent=gasto?'↑':'↓';
+                const dateBox=document.createElement('div'); dateBox.className='tx-mobile-datebox';
+                dateBox.innerHTML='<div class="mon"></div><div class="day"></div>';
+                dateBox.querySelector('.mon').textContent=mon; dateBox.querySelector('.day').textContent=day;
+                const info=document.createElement('div'); info.className='tx-mobile-info';
+                const d=document.createElement('div'); d.className='tx-mobile-desc'; d.textContent=desc;
+                const sub=document.createElement('div'); sub.className='tx-mobile-sub'; sub.textContent=cat;
+                info.append(d,sub);
+                const amount=document.createElement('div'); amount.className='tx-mobile-amount '+(gasto?'gasto':'ingreso'); amount.textContent=(gasto?'−':'+')+monto;
+                main.append(icon,dateBox,info,amount);
+                const bottom=document.createElement('div'); bottom.className='tx-mobile-bottom';
+                const catEl=document.createElement('div'); catEl.className='tx-mobile-cat'; catEl.textContent='🏷️ '+cat;
+                const actions=document.createElement('div'); actions.className='tx-mobile-actions';
+                const originals=cells[5].querySelectorAll('button');
+                originals.forEach((orig,index)=>{
+                  const b=document.createElement('button'); b.type='button'; b.textContent=index===0?'✏️':'🗑️'; b.title=index===0?'Editar':'Eliminar';
+                  b.addEventListener('click',()=>orig.click()); actions.appendChild(b);
+                });
+                bottom.append(catEl,actions);
+                item.append(main,bottom); mobile.appendChild(item);
               });
-              card.innerHTML=html;
-              card.appendChild(mobileList);'''
-          if needle not in s: raise SystemExit('render marker not found')
-          s=s.replace(needle,replacement,1)
-          old_bind="""    card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEditTransaction(b.dataset.edit));
-    card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ const tx=state.transactions.find(t=>t.id===b.dataset.del); if(!tx) return; showDeleteTransactionModal(tx, async()=>{ const original=state.transactions.slice(); state.transactions=state.transactions.filter(t=>t.id!==tx.id); const result=await saveState(); if(!result.cloud){ state.transactions=original; throw (result.error||new Error('No se pudo sincronizar con Supabase')); } renderList(); renderNav(); showToast('Transacción eliminada y sincronizada.'); }); });"""
-          new_bind="""    const editHandler=id=>openEditTransaction(id);
-    const deleteHandler=id=>{ const tx=state.transactions.find(t=>t.id===id); if(!tx) return; showDeleteTransactionModal(tx, async()=>{ const original=state.transactions.slice(); state.transactions=state.transactions.filter(t=>t.id!==tx.id); const result=await saveState(); if(!result.cloud){ state.transactions=original; throw (result.error||new Error('No se pudo sincronizar con Supabase')); } renderList(); renderNav(); showToast('Transacción eliminada y sincronizada.'); }); };
-    card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.edit));
-    card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.del));
-    card.querySelectorAll('[data-mobile-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.mobileEdit));
-    card.querySelectorAll('[data-mobile-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.mobileDel));"""
-          if old_bind not in s: raise SystemExit('binding marker not found')
-          s=s.replace(old_bind,new_bind,1)
-          extra='''<style id="tx-mobile-polish-v2">@media(max-width:600px){#txListCard{margin-top:10px;}.search-panel{grid-template-columns:1fr 1fr!important;gap:9px;}.search-panel .search-wide{grid-column:1 / -1;}.search-panel label{font-size:.72rem;}#txSearch{font-size:.9rem;padding:11px 12px;}#filterMonth,#filterTipo,#txCatFilter,#txSubFilter,#txAccountFilter,#txStatusFilter,#txDateFrom,#txDateTo,#txMinAmount,#txMaxAmount{min-height:42px;}#applyTxFilters,#clearTxFilters,#addManualBtn{min-height:44px;}}</style>'''
-          s=s.replace('</head>',extra+'</head>',1)
+              tableWrap.insertAdjacentElement('afterend',mobile);
+            }
+            let timer=null;
+            function schedule(){
+              clearTimeout(timer); timer=setTimeout(buildMobile,40);
+            }
+            function init(){
+              const card=document.getElementById('txListCard');
+              if(!card) return;
+              buildMobile();
+              const tableWrap=card.querySelector('.table-wrap');
+              if(tableWrap){ new MutationObserver(schedule).observe(tableWrap,{childList:true,subtree:true,characterData:true}); }
+              window.addEventListener('resize',schedule);
+              document.addEventListener('click',function(e){
+                const b=e.target.closest && e.target.closest('#txListCard button');
+                if(b) schedule();
+              },true);
+            }
+            if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
+          })();
+          </script>'''
+          s=s.replace('</body>',script+'\n</body>',1)
           p.write_text(s,encoding='utf-8')
           PY
-      - name: Validate source
+      - name: Validate
         run: |
+          grep -q 'MOBILE_TX_FRONT_V3' index.html
           grep -q 'tx-mobile-list' index.html
-          grep -q 'data-mobile-edit' index.html
-          grep -q 'data-mobile-del' index.html
+          grep -q 'tx-mobile-actions' index.html
       - name: Commit
         run: |
           if git diff --quiet -- index.html; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'feat: front móvil de transacciones con acciones funcionales'
+          git commit -m 'feat: tarjetas móviles con editar y eliminar funcionales'
           git pull --rebase origin main
           git push origin main
