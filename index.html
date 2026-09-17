@@ -1007,21 +1007,26 @@ function renderDashboardMobile(app){
     render();
   };
   document.getElementById('mobileMonthPicker').onclick=()=>{
-    if(dashboardPeriod==='daily'){
-      const input=document.createElement('input');
-      input.type='date'; input.value=dashboardDate; input.style.cssText='position:fixed;opacity:0;pointer-events:none;';
-      document.body.appendChild(input);
-      input.showPicker?.();
-      input.onchange=()=>{if(input.value){dashboardDate=input.value;currentMonth=input.value.slice(0,7);render();}};
-      setTimeout(()=>input.remove(),1000);
-    }else{
-      const promptMonth=window.prompt('Ingresa el mes en formato AAAA-MM',currentMonth);
-      if(promptMonth && /^\\d{4}-(0[1-9]|1[0-2])$/.test(promptMonth)){
-        currentMonth=promptMonth;
+    const input=document.createElement('input');
+    input.type=dashboardPeriod==='daily' ? 'date' : 'month';
+    input.value=dashboardPeriod==='daily' ? dashboardDate : currentMonth;
+    input.style.cssText='position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;';
+    document.body.appendChild(input);
+    const apply=()=>{
+      if(!input.value) return;
+      if(dashboardPeriod==='daily'){
+        dashboardDate=input.value;
+        currentMonth=input.value.slice(0,7);
+      }else{
+        currentMonth=input.value;
         if(dashboardPeriod==='monthly') dashboardDate=currentMonth+'-01';
-        render();
       }
-    }
+      render();
+      input.remove();
+    };
+    input.onchange=apply;
+    input.onblur=()=>setTimeout(()=>{try{input.remove();}catch(e){}},300);
+    if(input.showPicker){ try{input.showPicker();}catch(e){input.focus();} } else input.focus();
   };
 }
 
