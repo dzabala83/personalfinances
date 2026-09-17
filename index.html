@@ -42,7 +42,7 @@ header h1{margin:0 0 4px; font-size:1.4rem;}
 header p{margin:0; color:var(--muted); font-size:0.85rem;}
 nav{
   display:flex; gap:6px; overflow-x:auto; padding:10px 12px; background:var(--card);
-  border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;
+  border-bottom:1px solid var(--border); position:relative; z-index:10;
 }
 nav button{
   flex:0 0 auto; padding:8px 14px; border-radius:20px; border:1px solid var(--border);
@@ -189,13 +189,7 @@ canvas{max-height:260px;}
             #filterMonth,#filterTipo,#txCatFilter,#txSubFilter,#txAccountFilter,#txStatusFilter,#txDateFrom,#txDateTo,#txMinAmount,#txMaxAmount{min-height:42px;}
             #applyTxFilters,#clearTxFilters,#addManualBtn{min-height:44px;}
           }
-          </style><style id="mobile-nav-scroll-fix-v1">
-/* MOBILE_NAV_SCROLL_FIX_V1 */
-@media(max-width:600px){
-  nav{position:relative!important;top:auto!important;}
-}
-</style>
-</head>
+          </style></head>
 <body>
 
 <div id="authGate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;">
