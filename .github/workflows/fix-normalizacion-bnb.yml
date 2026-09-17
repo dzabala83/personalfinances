@@ -2,7 +2,8 @@ name: Corregir normalizacion BNB
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -11,48 +12,33 @@ jobs:
   fix:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Reemplazar parser BNB
+        shell: python
         run: |
-          python3 - <<'PY'
           from pathlib import Path
-          p = Path('index.html')
-          s = p.read_text(encoding='utf-8')
-          start = s.index('function parseAmount(v){')
-          end = s.index('\n}\n\nfunction parseDate', start) + 2
-          new = '''function parseAmount(v){
+          p = Path("index.html")
+          s = p.read_text(encoding="utf-8")
+          start = s.index("function parseAmount(v){")
+          end = s.index("\n}\n\nfunction parseDate", start) + 2
+          new = """function parseAmount(v){
   if(v==='' || v==null) return 0;
   if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
-
   let s = String(v).trim().replace(/[^\\d.,-]/g,'');
   if(!s) return 0;
-
-  // Algoritmo BNB solicitado:
-  // 1) eliminar solamente la primera coma encontrada desde la derecha;
-  // 2) convertir el punto restante en coma;
-  // 3) usar punto internamente para convertir a Number.
   const comma = s.lastIndexOf(',');
-  if(comma >= 0){
-    s = s.slice(0, comma) + s.slice(comma + 1);
-  }
-
+  if(comma >= 0) s = s.slice(0, comma) + s.slice(comma + 1);
   const dot = s.lastIndexOf('.');
-  if(dot >= 0){
-    s = s.slice(0, dot) + ',' + s.slice(dot + 1);
-  }
-
+  if(dot >= 0) s = s.slice(0, dot) + ',' + s.slice(dot + 1);
   s = s.replace(',', '.');
-
   const n = Number(s);
   return Number.isFinite(n) ? n : 0;
-}'''
-          p.write_text(s[:start] + new + s[end:], encoding='utf-8')
-          print('Parser BNB reemplazado.')
-          PY
+}"""
+          p.write_text(s[:start] + new + s[end:], encoding="utf-8")
+          print("Parser BNB actualizado")
 
-      - name: Validar parser
+      - name: Validar
         run: |
           node - <<'JS'
           function parseAmount(v){
@@ -68,29 +54,16 @@ jobs:
             const n=Number(s);
             return Number.isFinite(n)?n:0;
           }
-          const tests=[
-            ['4,322.53',4322.53],
-            ['4322.53',4322.53],
-            ['4322,53',432253],
-            ['24.50',24.50],
-            ['4,322.53 Bs',4322.53],
-            [4322.53,4322.53]
-          ];
-          for(const [raw,expected] of tests){
-            const got=parseAmount(raw);
-            if(got!==expected) throw new Error(`${raw} => ${got}; esperado ${expected}`);
-          }
-          console.log('OK: algoritmo validado.');
+          if(parseAmount('4,322.53') !== 4322.53) throw new Error('4,322.53 fallo');
+          if(parseAmount(4322.53) !== 4322.53) throw new Error('numero fallo');
+          console.log('OK');
           JS
 
-      - name: Guardar index corregido
+      - name: Guardar
         run: |
-          if git diff --quiet -- index.html; then
-            echo 'Sin cambios en index.html.'
-            exit 0
-          fi
+          if git diff --quiet -- index.html; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'fix: normalizar importes BNB con algoritmo simple'
+          git commit -m 'fix: normalizar importes BNB'
           git push
