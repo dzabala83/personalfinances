@@ -2,7 +2,8 @@ name: Corregir importes BNB
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,9 +15,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Corregir parser de importes
-        shell: python
+      - name: Reemplazar parser de importes
         run: |
+          python3 - <<'PY'
           from pathlib import Path
 
           path = Path('index.html')
@@ -36,41 +37,47 @@ jobs:
 }'''
 
           new = '''function parseAmount(v){
-  if(v===''||v==null) return 0;
-  if(typeof v === 'number') return v;
+  // Normaliza TODOS los importes de Excel antes de guardarlos.
+  // Soporta 4,322.53 (miles=coma, decimal=punto), 4.322,53
+  // (miles=punto, decimal=coma) y decimales simples.
+  if(v==='' || v==null) return 0;
+  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
 
-  // El extracto BNB puede entregar importes como texto con formato
-  // anglosajón: 4,322.53. En ese formato la coma es miles y el punto
-  // es decimal. También aceptamos el formato latino 4.322,53.
-  let s = String(v).trim().replace(/[^\\d.,-]/g,'');
+  let s = String(v)
+    .trim()
+    .replace(/\\u00A0/g,' ')
+    .replace(/[^\\d.,-]/g,'');
   if(!s) return 0;
 
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
+  const comma = s.lastIndexOf(',');
+  const dot = s.lastIndexOf('.');
 
-  if(lastComma >= 0 && lastDot >= 0){
-    // El separador que aparece último se considera decimal.
-    if(lastDot > lastComma){
-      // 4,322.53 -> 4322.53
-      s = s.replace(/,/g,'');
-    }else{
+  // Si existen ambos separadores, el último es el separador decimal.
+  if(comma >= 0 && dot >= 0){
+    if(comma > dot){
       // 4.322,53 -> 4322.53
       s = s.replace(/\\./g,'').replace(',', '.');
-    }
-  }else if(lastComma >= 0){
-    const decimals = s.length - lastComma - 1;
-    if(decimals === 2){
-      // 4322,53 -> 4322.53
-      s = s.replace(/,/g,'.');
     }else{
-      // 4,322 -> 4322
+      // 4,322.53 -> 4322.53
       s = s.replace(/,/g,'');
     }
-  }else if(lastDot >= 0){
-    const decimals = s.length - lastDot - 1;
-    if(decimals !== 2){
-      // 4.322 -> 4322 (miles, cuando no hay dos decimales)
-      s = s.replace(/\\./g,'');
+  }
+  // Solo coma: dos dígitos finales = decimal; tres dígitos = miles.
+  else if(comma >= 0){
+    const parts = s.split(',');
+    const last = parts[parts.length-1];
+    if(parts.length > 2 || last.length === 3){
+      s = parts.join('');
+    }else{
+      s = s.replace(',', '.');
+    }
+  }
+  // Solo punto: dos dígitos finales = decimal; tres dígitos = miles.
+  else if(dot >= 0){
+    const parts = s.split('.');
+    const last = parts[parts.length-1];
+    if(parts.length > 2 || last.length === 3){
+      s = parts.join('');
     }
   }
 
@@ -79,54 +86,57 @@ jobs:
 }'''
 
           if old not in text:
-              raise SystemExit('No se encontró el parser original esperado.')
+              raise SystemExit('No se encontró el parser original esperado en index.html')
 
-          text = text.replace(old, new, 1)
-          path.write_text(text, encoding='utf-8')
-          print('Parser de importes corregido.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          print('Parser de importes reemplazado correctamente.')
+          PY
 
-      - name: Verificar casos BNB
-        shell: python
+      - name: Probar parser real
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, subprocess, tempfile
+
+          text = Path('index.html').read_text(encoding='utf-8')
+          m = re.search(r"function parseAmount\\(v\\)\\{.*?\\n\\}", text, re.S)
+          if not m:
+              raise SystemExit('No se encontró parseAmount para probar')
+
+          fn = m.group(0)
           cases = {
               '4,322.53': 4322.53,
-              '1,500.00': 1500.00,
+              '1,500.00': 1500.0,
               '3,874.88': 3874.88,
               '521.33': 521.33,
-              '24.50': 24.50,
+              '24.50': 24.5,
               '4.322,53': 4322.53,
-              '1.500,00': 1500.00,
-              '4322,53': 4322.53,
+              '1.500,00': 1500.0,
+              '24,50': 24.5,
+              '1,500': 1500.0,
+              '1.500': 1500.0,
           }
+
+          lines = [fn]
           for raw, expected in cases.items():
-              s = raw
-              last_comma = s.rfind(',')
-              last_dot = s.rfind('.')
-              if last_comma >= 0 and last_dot >= 0:
-                  if last_dot > last_comma:
-                      s = s.replace(',', '')
-                  else:
-                      s = s.replace('.', '').replace(',', '.')
-              elif last_comma >= 0:
-                  decimals = len(s) - last_comma - 1
-                  s = s.replace(',', '.') if decimals == 2 else s.replace(',', '')
-              elif last_dot >= 0:
-                  decimals = len(s) - last_dot - 1
-                  if decimals != 2:
-                      s = s.replace('.', '')
-              value = float(s)
-              assert abs(value - expected) < 1e-9, (raw, value, expected)
-          print('Todos los casos de importes pasaron la verificación.')
+              js = raw.replace('\\', '\\\\').replace("'", "\\'")
+              lines.append(f"if(parseAmount('{js}') !== {expected}) throw new Error('{js} => ' + parseAmount('{js}'));" )
+          script = '\n'.join(lines)
+          with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False) as f:
+              f.write(script)
+              name=f.name
+          subprocess.run(['node', name], check=True)
+          print('✓ Todos los formatos BNB fueron validados.')
+          PY
 
       - name: Guardar cambios
-        shell: bash
         run: |
           if git diff --quiet -- index.html; then
-            echo "No hay cambios que guardar."
+            echo 'No hay cambios en index.html.'
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m "Corregir importes con separador de miles BNB"
+          git commit -m 'Normalizar importes BNB'
           git push
