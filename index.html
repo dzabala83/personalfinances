@@ -1932,8 +1932,8 @@ function renderBackup(app){
 
     const ok = await showTimedDeleteConfirm({
       title:'Borrar todos los datos',
-      message:'Se eliminarán de forma permanente todas tus categorías, subcategorías, reglas, presupuestos y transacciones de esta cuenta. Esta acción no se puede deshacer.',
-      detail:'Las credenciales de acceso NO se eliminan.',
+      message:'Se eliminarán de forma permanente todas tus transacciones de esta cuenta. Tus categorías, subcategorías, reglas y presupuestos se conservarán.',
+      detail:'Las categorías, subcategorías, reglas y presupuestos NO se eliminan. Las credenciales de acceso tampoco.',
       confirmText:'Borrar todos los datos'
     });
     if(!ok) return;
@@ -1941,13 +1941,10 @@ function renderBackup(app){
     btn.disabled=true;
     btn.textContent='Borrando…';
     try{
-      // Orden seguro respetando las relaciones: primero tablas hijas y luego categorías.
-      const tables=['presupuestos','reglas_categorizacion','transacciones','subcategorias','categorias'];
-      for(const table of tables){
-        const {error}=await supabaseClient.from(table).delete().eq('usuario_id',currentUser.id);
-        if(error) throw error;
-      }
-      state={categories:[],transactions:[],rules:[],budgets:{}};
+      // En Backup, borrar todos los datos elimina únicamente las transacciones.
+      const {error}=await supabaseClient.from('transacciones').delete().eq('usuario_id',currentUser.id);
+      if(error) throw error;
+      state.transactions=[];
       saveLocal();
       cloudActive=true;
       showToast('Todos los datos fueron eliminados');
