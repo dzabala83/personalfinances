@@ -2164,9 +2164,9 @@ document.addEventListener('click', async (event) => {
     const tableWrap=card.querySelector('.table-wrap');
     const table=tableWrap && tableWrap.querySelector('table');
     if(!table) return;
-    let mobile=card.querySelector('.tx-mobile-list');
-    if(mobile) mobile.remove();
-    mobile=document.createElement('div');
+    const old=card.querySelector('.tx-mobile-list');
+    if(old) old.remove();
+    const mobile=document.createElement('div');
     mobile.className='tx-mobile-list';
     const rows=table.querySelectorAll('tbody tr');
     rows.forEach(row=>{
@@ -2183,7 +2183,7 @@ document.addEventListener('click', async (event) => {
       item.className='tx-mobile-card';
       item.innerHTML='<div class="tx-mobile-top"><div style="min-width:0;"><div class="tx-mobile-desc"></div><div class="tx-mobile-date"></div></div><div class="tx-mobile-amount '+(gasto?'gasto':'ingreso')+'">'+(gasto?'−':'+')+monto.replace(/^Bs\s*/,'')+'</div></div><div class="tx-mobile-meta"><div class="tx-mobile-cat"></div><span class="pill '+(gasto?'gasto':'ingreso')+'"></span><div class="tx-mobile-actions">'+actions+'</div></div>';
       item.querySelector('.tx-mobile-desc').textContent=desc;
-      item.querySelector('.tx-mobile-date').textContent=date+' · '+(row.dataset.cuenta||'');
+      item.querySelector('.tx-mobile-date').textContent=date;
       item.querySelector('.tx-mobile-cat').textContent=cat;
       item.querySelector('.pill').textContent=tipo;
       mobile.appendChild(item);
@@ -2194,10 +2194,24 @@ document.addEventListener('click', async (event) => {
     const card=document.getElementById('txListCard');
     if(card) buildMobileList(card);
   }
-  const observer=new MutationObserver(()=>sync());
-  observer.observe(document.getElementById('app'),{childList:true,subtree:true});
+  let observer;
+  function refreshObserver(){
+    const root=document.getElementById('app');
+    if(!root) return;
+    if(observer) observer.disconnect();
+    observer=new MutationObserver(()=>{
+      observer.disconnect();
+      sync();
+      const current=document.getElementById('app');
+      if(current) observer.observe(current,{childList:true,subtree:true});
+    });
+    observer.observe(root,{childList:true,subtree:true});
+  }
   window.addEventListener('resize',sync);
-  setTimeout(sync,0);
+  setTimeout(()=>{
+    sync();
+    refreshObserver();
+  },0);
 })();
 </script>
 </body>
