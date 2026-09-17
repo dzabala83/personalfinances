@@ -2,8 +2,7 @@ name: Corregir normalizacion BNB
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: write
@@ -21,19 +20,19 @@ jobs:
           NEW_B64: ZnVuY3Rpb24gcGFyc2VBbW91bnQodil7CiAgLy8gTm9ybWFsaXphIGltcG9ydGVzIGRlIEV4Y2VsL0JOQiBzaW4gcGVyZGVyIHNlcGFyYWRvcmVzIGRlIG1pbGVzLgogIC8vIFNvcG9ydGEgNCwzMjIuNTMsIDQuMzIyLDUzLCA0MzIyLjUzLCA0MzIyLDUzIHkgdmFsb3JlcyBudW1lcmljb3MuCiAgaWYodj09PScnIHx8IHY9PW51bGwpIHJldHVybiAwOwogIGlmKHR5cGVvZiB2ID09PSAnbnVtYmVyJykgcmV0dXJuIE51bWJlci5pc0Zpbml0ZSh2KSA/IHYgOiAwOwoKICBsZXQgcyA9IFN0cmluZyh2KS50cmltKCkucmVwbGFjZSgvW15cZC4sLV0vZywnJyk7CiAgaWYoIXMpIHJldHVybiAwOwoKICBjb25zdCBjb21tYSA9IHMubGFzdEluZGV4T2YoJywnKTsKICBjb25zdCBkb3QgPSBzLmxhc3RJbmRleE9mKCcuJyk7CgogIGlmKGNvbW1hID49IDAgJiYgZG90ID49IDApewogICAgaWYoY29tbWEgPiBkb3QpewogICAgICBzID0gcy5yZXBsYWNlKC9cLi9nLCcnKS5yZXBsYWNlKCcsJywgJy4nKTsKICAgIH1lbHNlewogICAgICBzID0gcy5yZXBsYWNlKC8sL2csJycpOwogICAgfQogIH1lbHNlIGlmKGNvbW1hID49IDApewogICAgY29uc3QgcGFydHMgPSBzLnNwbGl0KCcsJyk7CiAgICBjb25zdCBsYXN0ID0gcGFydHNbcGFydHMubGVuZ3RoLTFdOwogICAgaWYocGFydHMubGVuZ3RoID4gMiB8fCBsYXN0Lmxlbmd0aCA9PT0gMykgcyA9IHBhcnRzLmpvaW4oJycpOwogICAgZWxzZSBzID0gcy5yZXBsYWNlKCcsJywgJy4nKTsKICB9ZWxzZSBpZihkb3QgPj0gMCl7CiAgICBjb25zdCBwYXJ0cyA9IHMuc3BsaXQoJy4nKTsKICAgIGNvbnN0IGxhc3QgPSBwYXJ0c1twYXJ0cy5sZW5ndGgtMV07CiAgICBpZihwYXJ0cy5sZW5ndGggPiAyIHx8IGxhc3QubGVuZ3RoID09PSAzKSBzID0gcGFydHMuam9pbignJyk7CiAgfQoKICBjb25zdCBuID0gTnVtYmVyKHMpOwogIHJldHVybiBOdW1iZXIuaXNGaW5pdGUobikgPyBuIDogMDsKfQ==
         run: |
           python3 - <<'PY'
-          import base64
+          import base64, os
           from pathlib import Path
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
-          old=base64.b64decode('${OLD_B64}').decode()
-          new=base64.b64decode('${NEW_B64}').decode()
+          old=base64.b64decode(os.environ['OLD_B64']).decode()
+          new=base64.b64decode(os.environ['NEW_B64']).decode()
           if old not in s:
               raise SystemExit('No se encontro el parser anterior en index.html')
           p.write_text(s.replace(old,new,1),encoding='utf-8')
           print('Parser BNB corregido.')
           PY
 
-      - name: Probar casos BNB
+      - name: Probar normalizacion
         run: |
           node - <<'JS'
           function parseAmount(v){
@@ -54,12 +53,7 @@ jobs:
             }
             const n=Number(s); return Number.isFinite(n)?n:0;
           }
-          const tests=[
-            ['4,322.53',4322.53],['4.322,53',4322.53],['4322.53',4322.53],
-            ['4322,53',4322.53],['24.50',24.50],['24,50',24.50],
-            ['1,500',1500],['1.500',1500],['1,500.00',1500],['1.500,00',1500],
-            ['4,322.53 Bs',4322.53],[4322.53,4322.53]
-          ];
+          const tests=[['4,322.53',4322.53],['4.322,53',4322.53],['4322.53',4322.53],['4322,53',4322.53],['24.50',24.5],['24,50',24.5],['1,500',1500],['1.500',1500],['1,500.00',1500],['1.500,00',1500],['4,322.53 Bs',4322.53],[4322.53,4322.53]];
           for(const [raw,expected] of tests){const got=parseAmount(raw);if(got!==expected)throw new Error(`${raw} => ${got}; esperado ${expected}`)}
           console.log('OK: normalizacion BNB validada.');
           JS
