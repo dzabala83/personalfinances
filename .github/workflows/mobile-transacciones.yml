@@ -18,7 +18,7 @@ jobs:
       - name: Apply mobile transaction cards
         run: |
           echo 'c2NyaXB0' >/dev/null
-          echo 'BASE64_PATCH_SCRIPT' | base64 -d > /tmp/patch.py
+          echo 'VXNlIHRoZSBwYXRjaCBzY3JpcHQgZnJvbSB0aGUgd29ya2Zsb3cgaW5zdGVhZCBvZiBhIHBsYWNlaG9sZGVyLg==' | base64 -d > /tmp/patch.py
           python3 /tmp/patch.py
 
       - name: Validate
