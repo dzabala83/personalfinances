@@ -150,6 +150,25 @@ canvas{max-height:260px;}
   .search-panel .field{margin:0;}
   .search-wide{grid-column:span 2;}
   @media(max-width:600px){.search-wide{grid-column:span 1;}}
+
+/* ===== Vista móvil de transacciones ===== */
+.tx-mobile-list{display:none;}
+.tx-mobile-card{border:1px solid var(--border);border-radius:14px;padding:13px;margin-bottom:9px;background:var(--card);}
+.tx-mobile-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.tx-mobile-desc{font-weight:700;font-size:.92rem;line-height:1.3;overflow-wrap:anywhere;}
+.tx-mobile-date{font-size:.73rem;color:var(--muted);margin-top:4px;}
+.tx-mobile-amount{font-size:1rem;font-weight:800;white-space:nowrap;}
+.tx-mobile-amount.gasto{color:var(--red);}
+.tx-mobile-amount.ingreso{color:var(--green);}
+.tx-mobile-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.tx-mobile-cat{font-size:.76rem;color:var(--muted);overflow-wrap:anywhere;}
+.tx-mobile-actions{display:flex;gap:6px;}
+.tx-mobile-actions button{min-width:36px;min-height:34px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;font-size:.85rem;cursor:pointer;}
+@media(max-width:600px){
+  .tx-desktop-list{display:none!important;}
+  .tx-mobile-list{display:block;}
+  #txListCard{padding:10px;}
+}
 </style>
 
 <style>
@@ -2135,6 +2154,51 @@ document.addEventListener('click', async (event) => {
     btn.textContent = 'Borrar todos los datos';
   }
 }, true);
+</script>
+
+<script>
+/* Mobile transaction cards: keeps the existing desktop table and filter logic intact. */
+(function(){
+  function buildMobileList(card){
+    if(!card || window.innerWidth>600) return;
+    const tableWrap=card.querySelector('.table-wrap');
+    const table=tableWrap && tableWrap.querySelector('table');
+    if(!table) return;
+    let mobile=card.querySelector('.tx-mobile-list');
+    if(mobile) mobile.remove();
+    mobile=document.createElement('div');
+    mobile.className='tx-mobile-list';
+    const rows=table.querySelectorAll('tbody tr');
+    rows.forEach(row=>{
+      const cells=row.children;
+      if(cells.length<6) return;
+      const desc=cells[1].textContent.trim();
+      const date=cells[0].textContent.trim();
+      const cat=cells[2].textContent.trim() || 'Sin categoría';
+      const tipo=cells[3].textContent.trim();
+      const monto=cells[4].textContent.trim();
+      const actions=cells[5].innerHTML;
+      const gasto=tipo==='Gasto';
+      const item=document.createElement('div');
+      item.className='tx-mobile-card';
+      item.innerHTML='<div class="tx-mobile-top"><div style="min-width:0;"><div class="tx-mobile-desc"></div><div class="tx-mobile-date"></div></div><div class="tx-mobile-amount '+(gasto?'gasto':'ingreso')+'">'+(gasto?'−':'+')+monto.replace(/^Bs\s*/,'')+'</div></div><div class="tx-mobile-meta"><div class="tx-mobile-cat"></div><span class="pill '+(gasto?'gasto':'ingreso')+'"></span><div class="tx-mobile-actions">'+actions+'</div></div>';
+      item.querySelector('.tx-mobile-desc').textContent=desc;
+      item.querySelector('.tx-mobile-date').textContent=date+' · '+(row.dataset.cuenta||'');
+      item.querySelector('.tx-mobile-cat').textContent=cat;
+      item.querySelector('.pill').textContent=tipo;
+      mobile.appendChild(item);
+    });
+    tableWrap.parentNode.insertBefore(mobile,tableWrap.nextSibling);
+  }
+  function sync(){
+    const card=document.getElementById('txListCard');
+    if(card) buildMobileList(card);
+  }
+  const observer=new MutationObserver(()=>sync());
+  observer.observe(document.getElementById('app'),{childList:true,subtree:true});
+  window.addEventListener('resize',sync);
+  setTimeout(sync,0);
+})();
 </script>
 </body>
 </html>
