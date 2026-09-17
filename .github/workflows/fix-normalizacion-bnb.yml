@@ -15,76 +15,31 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Corregir parser y validar
+      - name: Reemplazar parser
+        env:
+          OLD_B64: ZnVuY3Rpb24gcGFyc2VBbW91bnQodil7CiAgaWYodj09PScnfHx2PT1udWxsKSByZXR1cm4gMDsKICBpZih0eXBlb2YgdiA9PT0gJ251bWJlcicpIHJldHVybiB2OwogIGxldCBzID0gU3RyaW5nKHYpLnRyaW0oKS5yZXBsYWNlKC9bXlxkLiwtXS9nLCcnKTsKICBpZihzLmluY2x1ZGVzKCcsJykgJiYgcy5pbmNsdWRlcygnLicpKXsKICAgIHMgPSBzLnJlcGxhY2UoL1wuL2csJycpLnJlcGxhY2UoJywnLCcuJyk7CiAgfSBlbHNlIGlmKHMuaW5jbHVkZXMoJywnKSAmJiAhcy5pbmNsdWRlcygnLicpKXsKICAgIHMgPSBzLnJlcGxhY2UoJywnLCcuJyk7CiAgfQogIGNvbnN0IG4gPSBwYXJzZUZsb2F0KHMpOwogIHJldHVybiBpc05hTihuKSA/IDAgOiBuOwp9
+          NEW_B64: ZnVuY3Rpb24gcGFyc2VBbW91bnQodil7CiAgLy8gTm9ybWFsaXphIGltcG9ydGVzIGRlIEV4Y2VsL0JOQiBzaW4gcGVyZGVyIHNlcGFyYWRvcmVzIGRlIG1pbGVzLgogIC8vIFNvcG9ydGEgNCwzMjIuNTMsIDQuMzIyLDUzLCA0MzIyLjUzLCA0MzIyLDUzIHkgdmFsb3JlcyBudW1lcmljb3MuCiAgaWYodj09PScnIHx8IHY9PW51bGwpIHJldHVybiAwOwogIGlmKHR5cGVvZiB2ID09PSAnbnVtYmVyJykgcmV0dXJuIE51bWJlci5pc0Zpbml0ZSh2KSA/IHYgOiAwOwoKICBsZXQgcyA9IFN0cmluZyh2KS50cmltKCkucmVwbGFjZSgvW15cZC4sLV0vZywnJyk7CiAgaWYoIXMpIHJldHVybiAwOwoKICBjb25zdCBjb21tYSA9IHMubGFzdEluZGV4T2YoJywnKTsKICBjb25zdCBkb3QgPSBzLmxhc3RJbmRleE9mKCcuJyk7CgogIGlmKGNvbW1hID49IDAgJiYgZG90ID49IDApewogICAgaWYoY29tbWEgPiBkb3QpewogICAgICBzID0gcy5yZXBsYWNlKC9cLi9nLCcnKS5yZXBsYWNlKCcsJywgJy4nKTsKICAgIH1lbHNlewogICAgICBzID0gcy5yZXBsYWNlKC8sL2csJycpOwogICAgfQogIH1lbHNlIGlmKGNvbW1hID49IDApewogICAgY29uc3QgcGFydHMgPSBzLnNwbGl0KCcsJyk7CiAgICBjb25zdCBsYXN0ID0gcGFydHNbcGFydHMubGVuZ3RoLTFdOwogICAgaWYocGFydHMubGVuZ3RoID4gMiB8fCBsYXN0Lmxlbmd0aCA9PT0gMykgcyA9IHBhcnRzLmpvaW4oJycpOwogICAgZWxzZSBzID0gcy5yZXBsYWNlKCcsJywgJy4nKTsKICB9ZWxzZSBpZihkb3QgPj0gMCl7CiAgICBjb25zdCBwYXJ0cyA9IHMuc3BsaXQoJy4nKTsKICAgIGNvbnN0IGxhc3QgPSBwYXJ0c1twYXJ0cy5sZW5ndGgtMV07CiAgICBpZihwYXJ0cy5sZW5ndGggPiAyIHx8IGxhc3QubGVuZ3RoID09PSAzKSBzID0gcGFydHMuam9pbignJyk7CiAgfQoKICBjb25zdCBuID0gTnVtYmVyKHMpOwogIHJldHVybiBOdW1iZXIuaXNGaW5pdGUobikgPyBuIDogMDsKfQ==
         run: |
           python3 - <<'PY'
+          import base64
           from pathlib import Path
-          import re
-
-          path = Path('index.html')
-          text = path.read_text(encoding='utf-8')
-
-          pattern = r"function parseAmount\(v\)\{.*?\n\}"
-          replacement = r'''function parseAmount(v){
-  // Normaliza importes de Excel/BNB sin perder separadores de miles.
-  // Soporta 4,322.53, 4.322,53, 4322.53, 4322,53 y valores numericos.
-  if(v==='' || v==null) return 0;
-  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
-
-  let s = String(v)
-    .trim()
-    .replace(/\u00A0/g,' ')
-    .replace(/[^\d.,-]/g,'');
-  if(!s) return 0;
-
-  const comma = s.lastIndexOf(',');
-  const dot = s.lastIndexOf('.');
-
-  // Ambos separadores: el que aparece ultimo es el decimal.
-  if(comma >= 0 && dot >= 0){
-    if(comma > dot){
-      // 4.322,53 -> 4322.53
-      s = s.replace(/\./g,'').replace(',', '.');
-    }else{
-      // 4,322.53 -> 4322.53
-      s = s.replace(/,/g,'');
-    }
-  }
-  // Solo coma: 2 digitos = decimal; 3 digitos = miles.
-  else if(comma >= 0){
-    const parts = s.split(',');
-    const last = parts[parts.length-1];
-    if(parts.length > 2 || last.length === 3){
-      s = parts.join('');
-    }else{
-      s = s.replace(',', '.');
-    }
-  }
-  // Solo punto: 2 digitos = decimal; 3 digitos = miles.
-  else if(dot >= 0){
-    const parts = s.split('.');
-    const last = parts[parts.length-1];
-    if(parts.length > 2 || last.length === 3){
-      s = parts.join('');
-    }
-  }
-
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
-}'''
-
-          new_text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
-          if count != 1:
-              raise SystemExit('No se encontro exactamente una funcion parseAmount en index.html')
-          path.write_text(new_text, encoding='utf-8')
-          print('Parser actualizado.')
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old=base64.b64decode('${OLD_B64}').decode()
+          new=base64.b64decode('${NEW_B64}').decode()
+          if old not in s:
+              raise SystemExit('No se encontro el parser anterior en index.html')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          print('Parser BNB corregido.')
           PY
 
-          node <<'JS'
+      - name: Probar casos BNB
+        run: |
+          node - <<'JS'
           function parseAmount(v){
             if(v==='' || v==null) return 0;
             if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
-            let s = String(v).trim().replace(/\u00A0/g,' ').replace(/[^\d.,-]/g,'');
+            let s=String(v).trim().replace(/[^\d.,-]/g,'');
             if(!s) return 0;
             const comma=s.lastIndexOf(','), dot=s.lastIndexOf('.');
             if(comma>=0 && dot>=0){
@@ -99,33 +54,19 @@ jobs:
             }
             const n=Number(s); return Number.isFinite(n)?n:0;
           }
-          const cases={
-            '4,322.53':4322.53,
-            '4.322,53':4322.53,
-            '4322.53':4322.53,
-            '4322,53':4322.53,
-            '24.50':24.50,
-            '24,50':24.50,
-            '1,500':1500,
-            '1.500':1500,
-            '1,500.00':1500,
-            '1.500,00':1500,
-            '4,322.53 Bs':4322.53
-          };
-          for(const [raw, expected] of Object.entries(cases)){
-            const got=parseAmount(raw);
-            if(got!==expected) throw new Error(`${raw} => ${got}, esperado ${expected}`);
-          }
-          if(parseAmount(4322.53)!==4322.53) throw new Error('Numero Excel incorrecto');
-          console.log('OK: todos los casos BNB pasaron.');
+          const tests=[
+            ['4,322.53',4322.53],['4.322,53',4322.53],['4322.53',4322.53],
+            ['4322,53',4322.53],['24.50',24.50],['24,50',24.50],
+            ['1,500',1500],['1.500',1500],['1,500.00',1500],['1.500,00',1500],
+            ['4,322.53 Bs',4322.53],[4322.53,4322.53]
+          ];
+          for(const [raw,expected] of tests){const got=parseAmount(raw);if(got!==expected)throw new Error(`${raw} => ${got}; esperado ${expected}`)}
+          console.log('OK: normalizacion BNB validada.');
           JS
 
-      - name: Commit cambio
+      - name: Guardar index corregido
         run: |
-          if git diff --quiet -- index.html; then
-            echo 'El parser ya estaba corregido.'
-            exit 0
-          fi
+          if git diff --quiet -- index.html; then echo 'Sin cambios.'; exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
