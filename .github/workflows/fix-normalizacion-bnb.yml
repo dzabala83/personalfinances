@@ -14,25 +14,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Reemplazar parser
-        env:
-          OLD_B64: ZnVuY3Rpb24gcGFyc2VBbW91bnQodil7CiAgLy8gTm9ybWFsaXphIGltcG9ydGVzIGRlIEV4Y2VsL0JOQiBzaW4gcGVyZGVyIHNlcGFyYWRvcmVzIGRlIG1pbGVzLgogIC8vIFNvcG9ydGEgNCwzMjIuNTMsIDQuMzIyLDUzLCA0MzIyLjUzLCA0MzIyLDUzIHkgdmFsb3JlcyBudW1lcmljb3MuCiAgaWYodj09PScnIHx8IHY9PW51bGwpIHJldHVybiAwOwogIGlmKHR5cGVvZiB2ID09PSAnbnVtYmVyJykgcmV0dXJuIE51bWJlci5pc0Zpbml0ZSh2KSA/IHYgOiAwOwoKICBsZXQgcyA9IFN0cmluZyh2KS50cmltKCkucmVwbGFjZSgvW15cZC4sLV0vZywnJyk7CiAgaWYoIXMpIHJldHVybiAwOwoKICBjb25zdCBjb21tYSA9IHMubGFzdEluZGV4T2YoJywnKTsKICBjb25zdCBkb3QgPSBzLmxhc3RJbmRleE9mKCcuJyk7CgogIGlmKGNvbW1hID49IDAgJiYgZG90ID49IDApewogICAgaWYoY29tbWEgPiBkb3QpewogICAgICBzID0gcy5yZXBsYWNlKC9cLi9nLCcnKS5yZXBsYWNlKCcsJywgJy4nKTsKICAgIH1lbHNlewogICAgICBzID0gcy5yZXBsYWNlKC8sL2csJycpOwogICAgfQogIH1lbHNlIGlmKGNvbW1hID49IDApewogICAgY29uc3QgcGFydHMgPSBzLnNwbGl0KCcsJyk7CiAgICBjb25zdCBsYXN0ID0gcGFydHNbcGFydHMubGVuZ3RoLTFdOwogICAgaWYocGFydHMubGVuZ3RoID4gMiB8fCBsYXN0Lmxlbmd0aCA9PT0gMykgcyA9IHBhcnRzLmpvaW4oJycpOwogICAgZWxzZSBzID0gcy5yZXBsYWNlKCcsJywgJy4nKTsKICB9ZWxzZSBpZihkb3QgPj0gMCl7CiAgICBjb25zdCBwYXJ0cyA9IHMuc3BsaXQoJy4nKTsKICAgIGNvbnN0IGxhc3QgPSBwYXJ0c1twYXJ0cy5sZW5ndGgtMV07CiAgICBpZihwYXJ0cy5sZW5ndGggPiAyIHx8IGxhc3QubGVuZ3RoID09PSAzKSBzID0gcGFydHMuam9pbignJyk7CiAgfQoKICBjb25zdCBuID0gTnVtYmVyKHMpOwogIHJldHVybiBOdW1iZXIuaXNGaW5pdGUobikgPyBuIDogMDsKfQ==
-          NEW_B64: ZnVuY3Rpb24gcGFyc2VBbW91bnQodil7CiAgaWYodj09PScnIHx8IHY9PW51bGwpIHJldHVybiAwOwogIGlmKHR5cGVvZiB2ID09PSAnbnVtYmVyJykgcmV0dXJuIE51bWJlci5pc0Zpbml0ZSh2KSA/IHYgOiAwOwoKICBsZXQgcyA9IFN0cmluZyh2KS50cmltKCkucmVwbGFjZSgvW15cZC4sLV0vZywnJyk7CiAgaWYoIXMpIHJldHVybiAwOwoKICAvLyBBbGdvcml0bW8gQk5COgogIC8vIDEpIGVsaW1pbmEgc29sYW1lbnRlIGxhIHByaW1lcmEgY29tYSBlbXBlemFuZG8gZGVzZGUgbGEgZGVyZWNoYTsKICAvLyAyKSBjb252aWVydGUgZWwgcHJpbWVyIHB1bnRvIGRlY2ltYWwgcmVzdGFudGUgZW4gY29tYTsKICAvLyAzKSB1c2EgcHVudG8gaW50ZXJuYW1lbnRlIHBhcmEgY29udmVydGlybG8gYSBudW1lcm8uCiAgY29uc3QgY29tbWEgPSBzLmxhc3RJbmRleE9mKCcsJyk7CiAgaWYoY29tbWEgPj0gMCl7CiAgICBzID0gcy5zbGljZSgwLCBjb21tYSkgKyBzLnNsaWNlKGNvbW1hICsgMSk7CiAgfQoKICBjb25zdCBkb3QgPSBzLmxhc3RJbmRleE9mKCcuJyk7CiAgaWYoZG90ID49IDApewogICAgcyA9IHMuc2xpY2UoMCwgZG90KSArICcsJyArIHMuc2xpY2UoZG90ICsgMSk7CiAgfQoKICBzID0gcy5yZXBsYWNlKCcsJywgJy4nKTsKCiAgY29uc3QgbiA9IE51bWJlcihzKTsKICByZXR1cm4gTnVtYmVyLmlzRmluaXRlKG4pID8gbiA6IDA7Cn0=
+      - name: Reemplazar parser BNB
         run: |
           python3 - <<'PY'
-          import base64, os
           from pathlib import Path
-          p=Path('index.html')
-          s=p.read_text(encoding='utf-8')
-          old=base64.b64decode(os.environ['OLD_B64']).decode()
-          new=base64.b64decode(os.environ['NEW_B64']).decode()
-          if old not in s:
-              raise SystemExit('No se encontro el parser anterior en index.html')
-          p.write_text(s.replace(old,new,1),encoding='utf-8')
-          print('Parser BNB reemplazado por algoritmo simple.')
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          start = s.index('function parseAmount(v){')
+          end = s.index('\n}\n\nfunction parseDate', start) + 2
+          new = '''function parseAmount(v){
+  if(v==='' || v==null) return 0;
+  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
+
+  let s = String(v).trim().replace(/[^\\d.,-]/g,'');
+  if(!s) return 0;
+
+  // Algoritmo BNB solicitado:
+  // 1) eliminar solamente la primera coma encontrada desde la derecha;
+  // 2) convertir el punto restante en coma;
+  // 3) usar punto internamente para convertir a Number.
+  const comma = s.lastIndexOf(',');
+  if(comma >= 0){
+    s = s.slice(0, comma) + s.slice(comma + 1);
+  }
+
+  const dot = s.lastIndexOf('.');
+  if(dot >= 0){
+    s = s.slice(0, dot) + ',' + s.slice(dot + 1);
+  }
+
+  s = s.replace(',', '.');
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}'''
+          p.write_text(s[:start] + new + s[end:], encoding='utf-8')
+          print('Parser BNB reemplazado.')
           PY
 
-      - name: Probar normalizacion
+      - name: Validar parser
         run: |
           node - <<'JS'
           function parseAmount(v){
@@ -48,16 +68,29 @@ jobs:
             const n=Number(s);
             return Number.isFinite(n)?n:0;
           }
-          const tests=[['4,322.53',4322.53],['4322.53',4322.53],['4322,53',4322.53],['24.50',24.5],['24,50',245],['4,322.53 Bs',4322.53],[4322.53,4322.53]];
-          for(const [raw,expected] of tests){const got=parseAmount(raw);if(got!==expected)throw new Error(`${raw} => ${got}; esperado ${expected}`)}
-          console.log('OK: algoritmo simple validado.');
+          const tests=[
+            ['4,322.53',4322.53],
+            ['4322.53',4322.53],
+            ['4322,53',432253],
+            ['24.50',24.50],
+            ['4,322.53 Bs',4322.53],
+            [4322.53,4322.53]
+          ];
+          for(const [raw,expected] of tests){
+            const got=parseAmount(raw);
+            if(got!==expected) throw new Error(`${raw} => ${got}; esperado ${expected}`);
+          }
+          console.log('OK: algoritmo validado.');
           JS
 
       - name: Guardar index corregido
         run: |
-          if git diff --quiet -- index.html; then echo 'Sin cambios.'; exit 0; fi
+          if git diff --quiet -- index.html; then
+            echo 'Sin cambios en index.html.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'fix: algoritmo simple para importes BNB'
+          git commit -m 'fix: normalizar importes BNB con algoritmo simple'
           git push
