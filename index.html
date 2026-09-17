@@ -851,6 +851,9 @@ function renderDashboardMobile(app){
   const totalSpent=cats.reduce((sum,x)=>sum+x.spent,0);
   const remaining=totalBudget-totalSpent;
   const totalPct=totalBudget>0?Math.min(totalSpent/totalBudget*100,100):0;
+  const budgetExceeded=remaining<0;
+  const budgetLabel=budgetExceeded?'Exceso sobre presupuesto':'Presupuesto disponible';
+  const budgetAmount=budgetExceeded?Math.abs(remaining):remaining;
 
   const budgetCard=document.createElement('div');
   budgetCard.className='mobile-budget-card';
@@ -858,8 +861,8 @@ function renderDashboardMobile(app){
     <div class="mobile-budget-head">
       <div class="mobile-budget-icon">▣</div>
       <div class="mobile-budget-copy">
-        <div class="mobile-budget-title">Presupuesto restante <span>(Mensual)</span></div>
-        <div class="mobile-budget-value">${fmtMoney(remaining)}</div>
+        <div class="mobile-budget-title">${budgetLabel}</div>
+        <div class="mobile-budget-value">${fmtMoney(budgetAmount)}</div>
         <div class="mobile-budget-total">De un total de ${fmtMoney(totalBudget)}</div>
       </div>
       <button class="mobile-budget-action" type="button">Ajustes de presupuestos <span>›</span></button>
