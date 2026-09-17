@@ -1,0 +1,133 @@
+name: Corregir normalizacion BNB
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Corregir parser y validar
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+
+          pattern = r"function parseAmount\(v\)\{.*?\n\}"
+          replacement = r'''function parseAmount(v){
+  // Normaliza importes de Excel/BNB sin perder separadores de miles.
+  // Soporta 4,322.53, 4.322,53, 4322.53, 4322,53 y valores numericos.
+  if(v==='' || v==null) return 0;
+  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
+
+  let s = String(v)
+    .trim()
+    .replace(/\u00A0/g,' ')
+    .replace(/[^\d.,-]/g,'');
+  if(!s) return 0;
+
+  const comma = s.lastIndexOf(',');
+  const dot = s.lastIndexOf('.');
+
+  // Ambos separadores: el que aparece ultimo es el decimal.
+  if(comma >= 0 && dot >= 0){
+    if(comma > dot){
+      // 4.322,53 -> 4322.53
+      s = s.replace(/\./g,'').replace(',', '.');
+    }else{
+      // 4,322.53 -> 4322.53
+      s = s.replace(/,/g,'');
+    }
+  }
+  // Solo coma: 2 digitos = decimal; 3 digitos = miles.
+  else if(comma >= 0){
+    const parts = s.split(',');
+    const last = parts[parts.length-1];
+    if(parts.length > 2 || last.length === 3){
+      s = parts.join('');
+    }else{
+      s = s.replace(',', '.');
+    }
+  }
+  // Solo punto: 2 digitos = decimal; 3 digitos = miles.
+  else if(dot >= 0){
+    const parts = s.split('.');
+    const last = parts[parts.length-1];
+    if(parts.length > 2 || last.length === 3){
+      s = parts.join('');
+    }
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}'''
+
+          new_text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+          if count != 1:
+              raise SystemExit('No se encontro exactamente una funcion parseAmount en index.html')
+          path.write_text(new_text, encoding='utf-8')
+          print('Parser actualizado.')
+          PY
+
+          node <<'JS'
+          function parseAmount(v){
+            if(v==='' || v==null) return 0;
+            if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
+            let s = String(v).trim().replace(/\u00A0/g,' ').replace(/[^\d.,-]/g,'');
+            if(!s) return 0;
+            const comma=s.lastIndexOf(','), dot=s.lastIndexOf('.');
+            if(comma>=0 && dot>=0){
+              if(comma>dot) s=s.replace(/\./g,'').replace(',', '.');
+              else s=s.replace(/,/g,'');
+            } else if(comma>=0){
+              const p=s.split(','), last=p[p.length-1];
+              s=(p.length>2 || last.length===3) ? p.join('') : s.replace(',', '.');
+            } else if(dot>=0){
+              const p=s.split('.'), last=p[p.length-1];
+              if(p.length>2 || last.length===3) s=p.join('');
+            }
+            const n=Number(s); return Number.isFinite(n)?n:0;
+          }
+          const cases={
+            '4,322.53':4322.53,
+            '4.322,53':4322.53,
+            '4322.53':4322.53,
+            '4322,53':4322.53,
+            '24.50':24.50,
+            '24,50':24.50,
+            '1,500':1500,
+            '1.500':1500,
+            '1,500.00':1500,
+            '1.500,00':1500,
+            '4,322.53 Bs':4322.53
+          };
+          for(const [raw, expected] of Object.entries(cases)){
+            const got=parseAmount(raw);
+            if(got!==expected) throw new Error(`${raw} => ${got}, esperado ${expected}`);
+          }
+          if(parseAmount(4322.53)!==4322.53) throw new Error('Numero Excel incorrecto');
+          console.log('OK: todos los casos BNB pasaron.');
+          JS
+
+      - name: Commit cambio
+        run: |
+          if git diff --quiet -- index.html; then
+            echo 'El parser ya estaba corregido.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'fix: normalizar importes BNB correctamente'
+          git push
