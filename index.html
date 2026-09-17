@@ -905,20 +905,16 @@ function renderDashboardMobile(app){
           <span>Gastado</span><strong class="spent">${fmtMoney(x.spent)}</strong>
           <span>Disponible</span><strong class="${available<0?'negative':'available'}">${fmtMoney(available)}</strong>
         </div>
-        <div class="mobile-category-chevron">›</div>
       </div>
       <div class="mobile-category-progress"><div class="track"><div class="${pct>=100?'over':pct>=90?'warn':''}" style="width:${Math.min(pct,100)}%"></div></div><b>${Math.round(pct)}%</b></div>
     `;
-    card.onclick=(event)=>{
-      if(event.target.closest('.mobile-category-chevron')){
-        txFilterState={
-          month:null,tipo:'',search:'',cat:x.c.nombre,sub:'',account:'',status:'',
-          from:'',to:'',min:'',max:''
-        };
-        currentTab='transacciones';
-        render();
-        return;
-      }
+    card.onclick=()=>{
+      txFilterState={
+        month:null,tipo:'',search:'',cat:x.c.nombre,sub:'',account:'',status:'',
+        from:'',to:'',min:'',max:''
+      };
+      currentTab='transacciones';
+      render();
     };
     list.appendChild(card);
   });
