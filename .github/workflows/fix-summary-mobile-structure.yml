@@ -1,0 +1,126 @@
+name: Fix summary mobile structure
+
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-summary-mobile-structure.yml'
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Limpiar estructura antigua del resumen móvil
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Elimina el maquillaje móvil antiguo que se ejecutaba DESPUÉS de renderDashboard.
+          s, n_css = re.subn(r'<style id="summary-mobile-v1">.*?</style>\s*<script>\s*/\* SUMMARY_MOBILE_V1 \*/.*?</script>', '', s, flags=re.S)
+
+          # Elimina cualquier copia residual del mismo bloque si existiera.
+          s, n_css2 = re.subn(r'<style id="summary-mobile-v1">.*?</style>', '', s, flags=re.S)
+          s, n_js2 = re.subn(r'<script>\s*/\* SUMMARY_MOBILE_V1 \*/.*?</script>', '', s, flags=re.S)
+
+          # Inserta la versión móvil directamente dentro de renderDashboard para que
+          # el formato antiguo nunca llegue a pintarse en móvil.
+          marker = "function renderDashboard(app){"
+          guard = """function renderDashboardMobile(app){
+  const wrap=document.createElement('div');
+  const mn=document.createElement('div');
+  mn.className='month-nav';
+  mn.innerHTML=`<button id=\"prevM\">←</button><div class=\"label\">${monthLabel(currentMonth)}</div><button id=\"nextM\">→</button>`;
+  wrap.appendChild(mn);
+
+  const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
+  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0);
+
+  const summary=document.createElement('div');
+  summary.className='card summary-mobile-v2';
+  summary.innerHTML=`<div class=\"summary-stat-v2 income\"><div class=\"summary-icon-v2\">↑</div><div class=\"summary-label-v2\">Ingresos</div><div class=\"summary-value-v2\">${fmtMoney(ingresos)}</div></div><div class=\"summary-stat-v2 expense\"><div class=\"summary-icon-v2\">↓</div><div class=\"summary-label-v2\">Gastos</div><div class=\"summary-value-v2\">${fmtMoney(gastos)}</div></div>`;
+  wrap.appendChild(summary);
+
+  const cats=state.categories.filter(c=>c.tipo==='Gasto').map(c=>{
+    const budget=Number(categoryBudget(c))||0;
+    const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((s,t)=>s+Number(t.monto||0),0);
+    return {c,budget,spent};
+  }).filter(x=>x.spent!==0||x.budget!==0).sort((a,b)=>b.spent-a.spent);
+  const totalBudget=cats.reduce((s,x)=>s+x.budget,0);
+  const totalSpent=cats.reduce((s,x)=>s+x.spent,0);
+  const remaining=totalBudget-totalSpent;
+  const totalPct=totalBudget>0?Math.min(totalSpent/totalBudget*100,100):0;
+
+  const budgetCard=document.createElement('div');
+  budgetCard.className='card budget-mobile-v2';
+  budgetCard.innerHTML=`<div class=\"budget-head-v2\"><div><div class=\"budget-title-v2\">Presupuesto restante</div><div class=\"budget-remaining-v2\">${fmtMoney(remaining)}</div><div class=\"budget-total-v2\">De un total de ${fmtMoney(totalBudget)}</div></div><button class=\"budget-action-v2\" type=\"button\">Ajustes ›</button></div><div class=\"budget-progress-v2\"><strong>${Math.round(totalPct)}%</strong><div class=\"budget-track-v2\"><div class=\"budget-fill-v2\" style=\"width:${totalPct}%\"></div></div><span>${fmtMoney(totalSpent)}</span></div>`;
+  wrap.appendChild(budgetCard);
+
+  const title=document.createElement('h2');
+  title.className='summary-section-title-v2';
+  title.innerHTML='<span>Gastos por categoría</span><span>↕ Mayor gasto</span>';
+  wrap.appendChild(title);
+
+  const list=document.createElement('div');
+  list.className='summary-cat-list-v2';
+  const icons={'Comida':'🍴','Entretenimiento':'🎮','Servicios':'⚙️','Salud':'❤️','Educación':'🎓','Barbería/peluquería':'✂️','Deudas':'💳','Higiene':'🧴','Transporte':'🚕','Auto':'🚗','Iglesia':'⛪','Vivienda':'🏠','Vestimenta':'👕','Otros':'📦','Ayuda':'🤝','Banco':'🏦'};
+  cats.forEach(x=>{
+    const pct=x.budget>0?x.spent/x.budget*100:(x.spent>0?100:0);
+    const available=x.budget-x.spent;
+    const card=document.createElement('div');
+    card.className='summary-cat-card-v2';
+    card.innerHTML=`<div class=\"summary-cat-top-v2\"><div class=\"summary-cat-icon-v2\">${icons[x.c.nombre]||'📊'}</div><div><div class=\"summary-cat-name-v2\">${escapeHtml(x.c.nombre)}</div><div class=\"summary-cat-budget-v2\">Presupuesto: ${fmtMoney(x.budget)}</div></div><div class=\"summary-cat-side-v2\"><span>Gastado</span><strong>${fmtMoney(x.spent)}</strong><span>Disponible</span><strong class=\"${available<0?'negative':''}\">${fmtMoney(available)}</strong></div></div><div class=\"summary-cat-progress-v2\"><div><div class=\"summary-cat-track-v2\"><div class=\"summary-cat-fill-v2 ${pct>=100?'over':pct>=90?'warn':''}\" style=\"width:${Math.min(pct,100)}%\"></div></div></div><b>${Math.round(pct)}%</b></div>`;
+    list.appendChild(card);
+  });
+  if(!cats.length) list.innerHTML='<div class=\"empty\">Aún no tienes categorías con presupuesto o gastos este mes.</div>';
+  wrap.appendChild(list);
+
+  app.appendChild(wrap);
+  budgetCard.querySelector('.budget-action-v2').onclick=()=>{if(window.__goBudgetCategories)window.__goBudgetCategories();};
+  document.getElementById('prevM').onclick=()=>{currentMonth=shiftMonth(currentMonth,-1);render();};
+  document.getElementById('nextM').onclick=()=>{currentMonth=shiftMonth(currentMonth,1);render();};
+}
+
+"""
+          if 'function renderDashboardMobile(app){' not in s:
+              if marker not in s:
+                  raise SystemExit('No se encontró renderDashboard')
+              s=s.replace(marker, guard + marker, 1)
+
+          # Primera instrucción: en móvil se usa SOLO el nuevo árbol de Resumen.
+          needle = "function renderDashboard(app){\n  const wrap = document.createElement('div');"
+          repl = "function renderDashboard(app){\n  if(window.innerWidth<=600){ renderDashboardMobile(app); return; }\n  const wrap = document.createElement('div');"
+          if needle not in s:
+              raise SystemExit('No se encontró el cuerpo esperado de renderDashboard')
+          s=s.replace(needle,repl,1)
+
+          # Estilos exclusivos del nuevo árbol móvil.
+          style='''<style id="summary-mobile-v2">\n@media(max-width:600px){\n.summary-mobile-v2{display:grid!important;grid-template-columns:1fr 1fr;gap:0!important;padding:14px!important;border-radius:18px!important;}\n.summary-stat-v2{padding:7px 10px;}\n.summary-stat-v2:first-child{border-right:1px solid var(--border);}\n.summary-icon-v2{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;margin-bottom:7px;}\n.summary-stat-v2.income .summary-icon-v2{background:var(--green-soft);color:var(--green);}\n.summary-stat-v2.expense .summary-icon-v2{background:var(--red-soft);color:var(--red);}\n.summary-label-v2{font-size:.76rem;color:var(--muted);}\n.summary-value-v2{font-size:1.28rem;font-weight:800;margin-top:3px;}\n.summary-stat-v2.income .summary-value-v2{color:var(--green);}\n.summary-stat-v2.expense .summary-value-v2{color:var(--red);}\n.budget-mobile-v2{padding:16px!important;border-radius:18px!important;}\n.budget-head-v2{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}\n.budget-title-v2{font-size:.82rem;color:var(--muted);}\n.budget-remaining-v2{font-size:1.5rem;font-weight:800;color:var(--accent);margin-top:3px;}\n.budget-total-v2{font-size:.78rem;color:var(--muted);margin-top:4px;}\n.budget-action-v2{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:11px;padding:9px 11px;font-size:.75rem;font-weight:700;}\n.budget-progress-v2{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;margin-top:14px;}\n.budget-progress-v2 strong{font-size:1.05rem;min-width:35px;}\n.budget-progress-v2 span{font-size:.75rem;color:var(--muted);white-space:nowrap;}\n.budget-track-v2{height:11px;border:1px solid var(--border);background:var(--bg);border-radius:10px;overflow:hidden;}\n.budget-fill-v2{height:100%;background:var(--accent);border-radius:10px;}\n.summary-section-title-v2{display:flex;justify-content:space-between;align-items:center;margin:20px 2px 10px!important;font-size:1rem!important;}\n.summary-section-title-v2 span:last-child{font-size:.75rem;color:var(--accent);}\n.summary-cat-list-v2{display:flex;flex-direction:column;gap:9px;}\n.summary-cat-card-v2{background:var(--card);border:1px solid var(--border);border-radius:17px;padding:13px 12px;}\n.summary-cat-top-v2{display:grid;grid-template-columns:42px minmax(0,1fr) 82px;gap:10px;align-items:center;}\n.summary-cat-icon-v2{width:42px;height:42px;border-radius:13px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;font-size:1.15rem;}\n.summary-cat-name-v2{font-size:.92rem;font-weight:800;line-height:1.2;}\n.summary-cat-budget-v2{font-size:.72rem;color:var(--muted);margin-top:3px;}\n.summary-cat-side-v2{text-align:right;font-size:.68rem;color:var(--muted);line-height:1.3;}\n.summary-cat-side-v2 strong{display:block;font-size:.8rem;color:var(--red);}\n.summary-cat-side-v2 strong:last-child{color:var(--green);}\n.summary-cat-side-v2 strong.negative{color:var(--red)!important;}\n.summary-cat-progress-v2{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin-top:10px;}\n.summary-cat-track-v2{height:9px;background:var(--bg);border:1px solid var(--border);border-radius:9px;overflow:hidden;}\n.summary-cat-fill-v2{height:100%;background:var(--accent);border-radius:9px;}\n.summary-cat-fill-v2.warn{background:var(--yellow);}\n.summary-cat-fill-v2.over{background:var(--red);}\n.summary-cat-progress-v2 b{font-size:.76rem;min-width:34px;text-align:right;}\n}\n</style>'''
+          if 'summary-mobile-v2' not in s:
+              s=s.replace('</head>',style+'\n</head>',1)
+
+          p.write_text(s,encoding='utf-8')
+          print('cleaned old summary mobile blocks:', n_css+n_css2+n_js2)
+
+      - name: Validar
+        run: |
+          grep -q 'function renderDashboardMobile(app)' index.html
+          grep -q 'if(window.innerWidth<=600){ renderDashboardMobile(app); return; }' index.html
+          ! grep -q 'SUMMARY_MOBILE_V1' index.html
+          ! grep -q 'summary-mobile-v1' index.html
+          grep -q 'summary-mobile-v2' index.html
+          echo 'OK: resumen móvil estructuralmente separado del formato antiguo.'
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: eliminar render antiguo del resumen móvil'
+          git push
