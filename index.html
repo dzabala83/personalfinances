@@ -2366,5 +2366,64 @@ document.addEventListener('click', async (event) => {
   window.addEventListener('resize',()=>{if(typeof window.render==='function'&&currentTab==='dashboard')requestAnimationFrame(()=>window.render());});
 })();
 </script>
+<style id="radial-menu-mobile-v1">
+@media(max-width:600px){
+  #mobileRadialMenu{display:block;position:fixed;top:14px;right:12px;width:190px;height:190px;z-index:50;pointer-events:none;}
+  #mobileRadialMenu .radial-center{position:absolute;right:0;top:0;width:50px;height:50px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:1.35rem;font-weight:800;box-shadow:0 3px 12px rgba(0,0,0,.12);cursor:pointer;pointer-events:auto;}
+  #mobileRadialMenu.open .radial-center{background:var(--accent);color:#fff;border-color:var(--accent);}
+  #mobileRadialMenu .radial-item{position:absolute;width:74px;height:58px;border-radius:18px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.72rem;font-weight:700;box-shadow:0 3px 12px rgba(0,0,0,.10);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;opacity:0;transform:scale(.65);transition:opacity .18s ease,transform .18s ease;pointer-events:none;}
+  #mobileRadialMenu.open .radial-item{opacity:1;transform:scale(1);pointer-events:auto;}
+  #mobileRadialMenu .radial-pend{right:42px;top:58px;}
+  #mobileRadialMenu .radial-cat{right:102px;top:112px;}
+  #mobileRadialMenu .radial-backup{right:-2px;top:122px;}
+  #mobileRadialMenu .radial-item .ri{font-size:1.15rem;line-height:1;}
+  nav button[data-mobile-radial-hidden="1"]{display:none!important;}
+  header{padding-right:74px;}
+  .budget-mobile-v1 .budget-action{cursor:pointer;}
+}
+@media(min-width:601px){#mobileRadialMenu{display:none!important;}}
+</style><script>
+/* RADIAL_MENU_MOBILE_V1 */
+(function(){
+  if(window.__radialMenuMobileV1)return;
+  window.__radialMenuMobileV1=true;
+  function init(){
+    if(document.getElementById('mobileRadialMenu'))return;
+    const nav=document.querySelector('nav');
+    if(!nav)return;
+    const findBtn=(word)=>[...nav.querySelectorAll('button')].find(b=>(b.textContent||'').toLowerCase().includes(word));
+    const pending=findBtn('pendientes');
+    const categories=findBtn('categorías')||findBtn('categorias');
+    const backup=findBtn('backup');
+    if(!pending&&!categories&&!backup)return;
+    [pending,categories,backup].filter(Boolean).forEach(b=>b.dataset.mobileRadialHidden='1');
+    const menu=document.createElement('div');
+    menu.id='mobileRadialMenu';
+    menu.innerHTML='<button class="radial-center" type="button" aria-label="Abrir menú">•••</button>'+
+      '<button class="radial-item radial-pend" type="button"><span class="ri">❓</span><span>Pendientes</span></button>'+
+      '<button class="radial-item radial-cat" type="button"><span class="ri">🏷️</span><span>Categorías</span></button>'+
+      '<button class="radial-item radial-backup" type="button"><span class="ri">💾</span><span>Backup</span></button>';
+    document.body.appendChild(menu);
+    const center=menu.querySelector('.radial-center');
+    center.onclick=()=>{menu.classList.toggle('open');center.textContent=menu.classList.contains('open')?'×':'•••';};
+    const bind=(sel,orig)=>{const b=menu.querySelector(sel);if(!b||!orig)return;b.onclick=()=>{menu.classList.remove('open');center.textContent='•••';orig.click();};};
+    bind('.radial-pend',pending);bind('.radial-cat',categories);bind('.radial-backup',backup);
+    document.addEventListener('click',e=>{if(menu.classList.contains('open')&&!menu.contains(e.target)){menu.classList.remove('open');center.textContent='•••';}},true);
+    const goCategories=()=>{if(categories)categories.click();};
+    window.__goBudgetCategories=goCategories;
+  }
+  function hookBudget(){
+    document.querySelectorAll('.budget-action').forEach(btn=>{
+      if(btn.dataset.radialBound==='1')return;
+      btn.dataset.radialBound='1';
+      btn.onclick=(e)=>{e.preventDefault();e.stopPropagation();if(window.__goBudgetCategories)window.__goBudgetCategories();};
+    });
+  }
+  const boot=()=>{init();hookBudget();};
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+  new MutationObserver(()=>{init();hookBudget();}).observe(document.body,{childList:true,subtree:true});
+  window.addEventListener('resize',boot);
+})();
+</script>
 </body>
 </html>
