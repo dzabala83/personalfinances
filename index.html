@@ -1666,52 +1666,16 @@ function colIndex(headerRow, ...names){
 }
 
 function parseAmount(v){
-  // Normaliza importes provenientes de Excel a un número JavaScript.
-  // Soporta formatos BNB/internacionales como 4,322.53 y 4.322,53,
-  // además de importes decimales simples como 24.50 o 24,50.
-  if(v==='' || v==null) return 0;
-  if(typeof v === 'number') return Number.isFinite(v) ? v : 0;
-
-  let s = String(v)
-    .trim()
-    .replace(/\u00A0/g,' ')
-    .replace(/[^\d.,-]/g,'');
-  if(!s) return 0;
-
-  const comma = s.lastIndexOf(',');
-  const dot = s.lastIndexOf('.');
-
-  // Con ambos separadores, el último es el decimal.
-  if(comma >= 0 && dot >= 0){
-    if(comma > dot){
-      // 4.322,53 -> 4322.53
-      s = s.replace(/\./g,'').replace(',', '.');
-    }else{
-      // 4,322.53 -> 4322.53
-      s = s.replace(/,/g,'');
-    }
+  if(v===''||v==null) return 0;
+  if(typeof v === 'number') return v;
+  let s = String(v).trim().replace(/[^\d.,-]/g,'');
+  if(s.includes(',') && s.includes('.')){
+    s = s.replace(/\./g,'').replace(',','.');
+  } else if(s.includes(',') && !s.includes('.')){
+    s = s.replace(',','.');
   }
-  // Solo coma: 24,50 = decimal; 1,500 = miles.
-  else if(comma >= 0){
-    const parts = s.split(',');
-    const last = parts[parts.length-1];
-    if(parts.length > 2 || last.length === 3){
-      s = parts.join('');
-    }else{
-      s = s.replace(',', '.');
-    }
-  }
-  // Solo punto: 24.50 = decimal; 1.500 = miles.
-  else if(dot >= 0){
-    const parts = s.split('.');
-    const last = parts[parts.length-1];
-    if(parts.length > 2 || last.length === 3){
-      s = parts.join('');
-    }
-  }
-
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
 }
 
 function parseDate(v){
@@ -1968,8 +1932,8 @@ function renderBackup(app){
 
     const ok = await showTimedDeleteConfirm({
       title:'Borrar todos los datos',
-      message:'Se eliminarán de forma permanente todas tus transacciones de esta cuenta. Tus categorías, subcategorías, reglas y presupuestos se conservarán.',
-      detail:'Las categorías, subcategorías, reglas y presupuestos NO se eliminan. Las credenciales de acceso tampoco.',
+      message:'Se eliminarán de forma permanente todas tus categorías, subcategorías, reglas, presupuestos y transacciones de esta cuenta. Esta acción no se puede deshacer.',
+      detail:'Las credenciales de acceso NO se eliminan.',
       confirmText:'Borrar todos los datos'
     });
     if(!ok) return;
@@ -1977,10 +1941,13 @@ function renderBackup(app){
     btn.disabled=true;
     btn.textContent='Borrando…';
     try{
-      // En Backup, borrar todos los datos elimina únicamente las transacciones.
-      const {error}=await supabaseClient.from('transacciones').delete().eq('usuario_id',currentUser.id);
-      if(error) throw error;
-      state.transactions=[];
+      // Orden seguro respetando las relaciones: primero tablas hijas y luego categorías.
+      const tables=['presupuestos','reglas_categorizacion','transacciones','subcategorias','categorias'];
+      for(const table of tables){
+        const {error}=await supabaseClient.from(table).delete().eq('usuario_id',currentUser.id);
+        if(error) throw error;
+      }
+      state={categories:[],transactions:[],rules:[],budgets:{}};
       saveLocal();
       cloudActive=true;
       showToast('Todos los datos fueron eliminados');

@@ -1,1 +1,0 @@
-Restauración controlada de index.html a la versión base b6ca5c7dd4ffcd7b7388f1885d0ee9ef90ab90e5. Este archivo es temporal y documenta la restauración antes de corregir backup y normalización.
