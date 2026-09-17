@@ -189,7 +189,13 @@ canvas{max-height:260px;}
             #filterMonth,#filterTipo,#txCatFilter,#txSubFilter,#txAccountFilter,#txStatusFilter,#txDateFrom,#txDateTo,#txMinAmount,#txMaxAmount{min-height:42px;}
             #applyTxFilters,#clearTxFilters,#addManualBtn{min-height:44px;}
           }
-          </style></head>
+          </style><style id="mobile-nav-scroll-fix-v1">
+/* MOBILE_NAV_SCROLL_FIX_V1 */
+@media(max-width:600px){
+  nav{position:relative!important;top:auto!important;}
+}
+</style>
+</head>
 <body>
 
 <div id="authGate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;">
