@@ -1,4 +1,4 @@
-name: Final mobile UI cleanup
+name: Apply mobile Resumen format
 
 on:
   push:
@@ -8,77 +8,44 @@ permissions:
   contents: write
 
 jobs:
-  cleanup-mobile:
+  apply-summary-format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Limpiar estructura móvil
+      - name: Aplicar navegación del ajuste de presupuesto
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
-
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
           original = s
-
-          # 1. Eliminar el parche legacy que forzaba el nav con !important.
-          s = re.sub(
-              r'<style id="mobile-nav-scroll-fix-v1">.*?</style>\s*',
-              '', s, flags=re.S
-          )
-
-          # 2. El nav ya no debe ser sticky en móvil. El menú radial es el único
-          #    acceso flotante; así evitamos dos capas de navegación compitiendo
-          #    durante el desplazamiento de Safari/iOS.
-          s = s.replace(
-              'border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10;',
-              'border-bottom:1px solid var(--border); position:relative; z-index:10;',
-              1
-          )
-
-          # 3. El render móvil del Resumen debe ser la única entrada móvil.
-          #    No se agregan wrappers posteriores ni requestAnimationFrame.
-          #    El código actual ya contiene esta bifurcación directa.
-          marker = "function renderDashboard(app){\n  if(window.innerWidth<=600){ renderDashboardMobile(app); return; }"
-          if marker not in s:
-              raise SystemExit('ERROR: no se encontró el render móvil directo del Resumen')
-
-          # 4. No permitir que queden restos explícitos del render móvil anterior.
-          legacy_patterns = [
-              r'<style id="summary-mobile-v1">.*?</style>\s*',
-              r'<script>\s*/\* SUMMARY_MOBILE_V1 \*/.*?</script>\s*',
-              r'<style id="summary-mobile-v1">.*?</style>\s*'
-          ]
-          for pattern in legacy_patterns:
-              s = re.sub(pattern, '', s, flags=re.S)
-
+          old_button = '<button class="budget-action-v2" type="button">Ajustes ›</button>'
+          new_button = '<button class="budget-action-v2" type="button">Ajustes de presupuestos <span aria-hidden="true">›</span></button>'
+          if old_button in s:
+              s = s.replace(old_button, new_button, 1)
+          elif new_button not in s:
+              raise SystemExit('ERROR: no se encontró el botón de ajustes de presupuesto')
+          old_click = "budgetCard.querySelector('.budget-action-v2').onclick=()=>{if(window.__goBudgetCategories)window.__goBudgetCategories();};"
+          new_click = "budgetCard.querySelector('.budget-action-v2').onclick=()=>{currentTab='categorias';render();};"
+          if old_click in s:
+              s = s.replace(old_click, new_click, 1)
+          elif new_click not in s:
+              raise SystemExit('ERROR: no se encontró la acción del botón de ajustes de presupuesto')
           p.write_text(s, encoding='utf-8')
           print('changed:', s != original)
-          print('mobile render count:', s.count('function renderDashboardMobile(app)'))
-          print('legacy summary marker:', 'SUMMARY_MOBILE_V1' in s)
-          print('legacy nav patch:', 'mobile-nav-scroll-fix-v1' in s)
           PY
-
-      - name: Validar estructura
+      - name: Validar
         run: |
+          grep -q 'Ajustes de presupuestos' index.html
+          grep -q "currentTab='categorias';render();" index.html
           test "$(grep -o 'function renderDashboardMobile(app)' index.html | wc -l)" -eq 1
-          grep -q 'if(window.innerWidth<=600){ renderDashboardMobile(app); return; }' index.html
-          ! grep -q 'SUMMARY_MOBILE_V1' index.html
-          ! grep -q 'mobile-nav-scroll-fix-v1' index.html
-          grep -q 'position:relative; z-index:10;' index.html
-
-      - name: Commit si hubo cambios
+      - name: Commit
         run: |
-          if git diff --quiet -- index.html; then
-            echo 'No hay cambios en index.html.'
-            exit 0
-          fi
+          if git diff --quiet -- index.html; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'fix: eliminar navegación sticky legacy en móvil'
+          git commit -m 'feat: botón de ajustes de presupuesto abre categorías'
           git push origin main
