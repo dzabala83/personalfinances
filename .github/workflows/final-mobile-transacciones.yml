@@ -98,17 +98,37 @@ jobs:
           s=s.replace('</body>',script+'\n</body>',1)
           p.write_text(s,encoding='utf-8')
           PY
+      - name: Fix mobile old sticky menu
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          marker='MOBILE_NAV_SCROLL_FIX_V1'
+          if marker in s:
+              print('Mobile nav scroll fix already installed')
+              raise SystemExit(0)
+          css=r'''<style id="mobile-nav-scroll-fix-v1">
+          /* MOBILE_NAV_SCROLL_FIX_V1 */
+          @media(max-width:600px){
+            nav{position:relative!important;top:auto!important;}
+          }
+          </style>'''
+          s=s.replace('</head>',css+'\n</head>',1)
+          p.write_text(s,encoding='utf-8')
+          PY
       - name: Validate
         run: |
           grep -q 'MOBILE_TX_FRONT_V3' index.html
           grep -q 'tx-mobile-list' index.html
           grep -q 'tx-mobile-actions' index.html
+          grep -q 'MOBILE_NAV_SCROLL_FIX_V1' index.html
       - name: Commit
         run: |
           if git diff --quiet -- index.html; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add index.html
-          git commit -m 'feat: tarjetas móviles con editar y eliminar funcionales'
+          git commit -m 'fix: evitar menú anterior fijo al hacer scroll en móvil'
           git pull --rebase origin main
           git push origin main
