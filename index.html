@@ -173,6 +173,95 @@ canvas{max-height:260px;}
 .tx-mobile-actions button{min-width:40px;min-height:38px;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:9px;font-size:1rem;cursor:pointer;}
 .tx-mobile-actions button:active{transform:scale(.96);}
 @media(max-width:600px){.tx-desktop-list{display:none!important;}.tx-mobile-list{display:block;}#txListCard{padding:10px;}#txListCard>.table-wrap{display:none!important;}}
+
+/* ===== NUEVO FRONT MÓVIL — Resumen ===== */
+.mobile-summary-shell{display:block;}
+.mobile-money-card,.mobile-budget-card,.mobile-category-card{background:var(--card);border:1px solid #edf0f5;box-shadow:0 2px 12px rgba(15,23,42,.05);}
+.mobile-month-control{display:grid;grid-template-columns:58px 1fr 58px;gap:10px;align-items:center;margin:4px 0 10px;}
+.mobile-month-control .month-arrow{height:58px;border:1px solid #e7ebf2;background:var(--card);border-radius:18px;color:#0b255d;font-size:2rem;line-height:1;}
+.mobile-month-control .month-picker{height:58px;border:1px solid #e7ebf2;background:var(--card);border-radius:18px;color:#0b255d;display:flex;align-items:center;justify-content:center;gap:14px;font-size:1.05rem;}
+.mobile-month-control .month-calendar{font-size:1.35rem;}
+.mobile-period{margin-left:auto;width:215px;height:58px;border:1px solid #e7ebf2;border-radius:18px;background:var(--card);display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:1rem;color:#102b62;margin-bottom:12px;}
+.mobile-period .period-chevron{font-size:1.6rem;}
+.mobile-money-card{border-radius:18px;padding:18px 20px;display:grid;grid-template-columns:1fr 1px 1fr;gap:18px;align-items:center;margin-bottom:12px;}
+.mobile-money-stat{display:flex;align-items:center;gap:14px;min-width:0;}
+.mobile-money-icon{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:800;flex:0 0 auto;}
+.mobile-money-stat.income .mobile-money-icon{background:#e6f8ed;color:#16a34a;}
+.mobile-money-stat.expense .mobile-money-icon{background:#fdebed;color:#ef233c;}
+.mobile-money-label{font-size:.9rem;color:#7b8495;margin-bottom:2px;}
+.mobile-money-value{font-size:1.35rem;font-weight:800;line-height:1.15;}
+.mobile-money-stat.income .mobile-money-value{color:#159447;}
+.mobile-money-stat.expense .mobile-money-value{color:#ef233c;}
+.mobile-money-note{font-size:.75rem;color:#6f7888;margin-top:4px;white-space:nowrap;}
+.mobile-money-divider{width:1px;height:62px;background:#e1e5ec;}
+.mobile-budget-card{border-radius:18px;padding:18px 20px;margin-bottom:24px;}
+.mobile-budget-head{display:grid;grid-template-columns:58px minmax(0,1fr) auto;gap:12px;align-items:center;}
+.mobile-budget-icon{width:52px;height:52px;border-radius:50%;background:#eaf3ff;color:#1683ed;display:flex;align-items:center;justify-content:center;font-size:1.5rem;}
+.mobile-budget-title{font-size:.98rem;color:#112b61;font-weight:600;}
+.mobile-budget-title span{color:#747d8d;font-weight:400;}
+.mobile-budget-value{font-size:1.5rem;font-weight:800;color:#1769dc;line-height:1.15;margin-top:6px;}
+.mobile-budget-total{font-size:.82rem;color:#778194;margin-top:4px;}
+.mobile-budget-action{border:0;background:#f6f8fc;color:#142d63;border-radius:14px;min-height:48px;padding:0 16px;font-size:.86rem;white-space:nowrap;font-weight:500;}
+.mobile-budget-action span{font-size:1.5rem;vertical-align:-2px;margin-left:6px;}
+.mobile-budget-progress{display:grid;grid-template-columns:44px 1fr 44px;gap:10px;align-items:center;margin-top:20px;color:#0b255d;font-size:.78rem;}
+.mobile-budget-progress>strong:last-child{text-align:right;}
+.mobile-budget-track{height:18px;border-radius:12px;background:#edf1f6;overflow:hidden;}
+.mobile-budget-track>div{height:100%;border-radius:12px;background:#4598ed;}
+.mobile-category-heading{display:flex;justify-content:space-between;align-items:center;margin:0 2px 12px;}
+.mobile-category-heading h2{font-size:1.18rem;margin:0;color:#0b255d;}
+.mobile-category-heading button{border:0;background:transparent;color:#1769dc;font-size:.9rem;display:flex;align-items:center;gap:7px;}
+.mobile-category-heading button b{font-size:1.2rem;font-weight:500;margin-left:2px;}
+.mobile-category-list{display:flex;flex-direction:column;gap:9px;padding-bottom:90px;}
+.mobile-category-card{width:100%;text-align:left;border-radius:16px;padding:10px 10px 10px 12px;color:var(--text);}
+.mobile-category-main{display:grid;grid-template-columns:54px minmax(0,1fr) 130px 20px;gap:10px;align-items:center;}
+.mobile-category-icon{width:50px;height:50px;border-radius:16px;background:#eef4ff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;}
+.mobile-category-card:nth-child(3n+1) .mobile-category-icon{background:#fff0f4;}
+.mobile-category-card:nth-child(3n+2) .mobile-category-icon{background:#f0efff;}
+.mobile-category-name{font-size:.94rem;font-weight:700;color:#102b62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mobile-category-budget{font-size:.74rem;color:#707b8e;margin-top:5px;white-space:nowrap;}
+.mobile-category-side{display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:.72rem;align-items:center;}
+.mobile-category-side span{color:#7a8392;}
+.mobile-category-side strong{font-size:.8rem;text-align:right;}
+.mobile-category-side .spent{color:#e6252e;}
+.mobile-category-side .available{color:#159447;}
+.mobile-category-side .negative{color:#e6252e;}
+.mobile-category-chevron{font-size:2rem;color:#0b255d;text-align:right;}
+.mobile-category-progress{display:grid;grid-template-columns:1fr 38px;gap:8px;align-items:center;margin:9px 0 0 64px;}
+.mobile-category-progress .track{height:10px;background:#edf1f6;border-radius:8px;overflow:hidden;}
+.mobile-category-progress .track>div{height:100%;background:#4a9bea;border-radius:8px;}
+.mobile-category-progress .track>div.warn{background:#e6a329;}
+.mobile-category-progress .track>div.over{background:#e63b43;}
+.mobile-category-progress b{text-align:right;color:#0b255d;font-size:.72rem;}
+.mobile-bottom-nav{display:none;}
+@media(max-width:600px){
+  body{background:#f7f9fc;padding-bottom:78px;}
+  header{background:transparent;border:0;text-align:left;padding:18px 70px 8px 18px;min-height:82px;}
+  header h1{font-size:1.25rem;color:#09275f;margin-bottom:4px;}
+  header p{font-size:.78rem;}
+  header #logoutBtn{display:none!important;}
+  #tabNav{display:none!important;}
+  main{max-width:none;padding:6px 12px 0;}
+  .mobile-money-card{grid-template-columns:minmax(0,1fr) 1px minmax(0,1fr);gap:10px;padding:14px 10px;}
+  .mobile-money-stat{gap:8px;}
+  .mobile-money-icon{width:48px;height:48px;font-size:1.65rem;}
+  .mobile-money-value{font-size:1.12rem;}
+  .mobile-money-note{font-size:.66rem;white-space:normal;}
+  .mobile-budget-head{grid-template-columns:48px minmax(0,1fr);gap:10px;}
+  .mobile-budget-icon{width:46px;height:46px;}
+  .mobile-budget-action{grid-column:2;justify-self:start;margin-top:8px;padding:0 12px;}
+  .mobile-budget-value{font-size:1.35rem;}
+  .mobile-category-main{grid-template-columns:48px minmax(0,1fr) 112px 16px;gap:8px;}
+  .mobile-category-icon{width:44px;height:44px;border-radius:14px;font-size:1.3rem;}
+  .mobile-category-progress{margin-left:56px;}
+  .mobile-category-side{font-size:.68rem;}
+  .mobile-category-side strong{font-size:.76rem;}
+  .mobile-bottom-nav{position:fixed;left:0;right:0;bottom:0;height:72px;background:rgba(255,255,255,.97);border-top:1px solid #e4e8ef;z-index:80;display:grid;grid-template-columns:1fr 1fr 76px 1fr 1fr;align-items:center;padding:0 6px env(safe-area-inset-bottom);}
+  .mobile-bottom-nav button{border:0;background:transparent;color:#718097;font-size:.68rem;display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 0;}
+  .mobile-bottom-nav button .mb-icon{font-size:1.45rem;line-height:1;}
+  .mobile-bottom-nav button.active{color:#1769dc;}
+  .mobile-bottom-nav .mb-plus{width:66px;height:66px;border-radius:50%;background:#1769dc;color:white;font-size:2.1rem;justify-self:center;box-shadow:0 7px 18px rgba(23,105,220,.28);margin-top:-24px;}
+  .mobile-bottom-nav .mb-plus span:last-child{display:none;}
+}
 </style>
 
 <style>
@@ -219,6 +308,13 @@ canvas{max-height:260px;}
 <main id="app"></main>
 
 <div class="toast" id="toast"></div>
+<div id="mobileBottomNav" class="mobile-bottom-nav" aria-label="Navegación móvil">
+  <button type="button" data-mobile-tab="dashboard"><span class="mb-icon">⌂</span><span>Inicio</span></button>
+  <button type="button" data-mobile-tab="dashboard" class="active"><span class="mb-icon">▥</span><span>Resumen</span></button>
+  <button type="button" class="mb-plus" id="mobileAddTransaction" aria-label="Agregar transacción">+</button>
+  <button type="button" data-mobile-tab="transacciones"><span class="mb-icon">▤</span><span>Transacciones</span></button>
+  <button type="button" id="mobileMore"><span class="mb-icon">•••</span><span>Más</span></button>
+</div>
 
 <script>
 /* ================= SEED DATA ================= */
@@ -706,7 +802,136 @@ function render(){
 }
 
 /* ================= DASHBOARD ================= */
-function renderDashboardMobile(app){const wrap=document.createElement('div');const mn=document.createElement('div');mn.className='month-nav';mn.innerHTML=`<button id="prevM">←</button><div class="label">${monthLabel(currentMonth)}</div><button id="nextM">→</button>`;wrap.appendChild(mn);const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto||0),0);const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0);const summary=document.createElement('div');summary.className='card summary-mobile-v2';summary.innerHTML=`<div class="summary-stat-v2 income"><div class="summary-icon-v2">↑</div><div class="summary-label-v2">Ingresos</div><div class="summary-value-v2">${fmtMoney(ingresos)}</div></div><div class="summary-stat-v2 expense"><div class="summary-icon-v2">↓</div><div class="summary-label-v2">Gastos</div><div class="summary-value-v2">${fmtMoney(gastos)}</div></div>`;wrap.appendChild(summary);const cats=state.categories.filter(c=>c.tipo==='Gasto').map(c=>{const budget=Number(categoryBudget(c))||0;const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((s,t)=>s+Number(t.monto||0),0);return {c,budget,spent};}).filter(x=>x.spent!==0||x.budget!==0).sort((a,b)=>b.spent-a.spent);const totalBudget=cats.reduce((s,x)=>s+x.budget,0),totalSpent=cats.reduce((s,x)=>s+x.spent,0),remaining=totalBudget-totalSpent,totalPct=totalBudget>0?Math.min(totalSpent/totalBudget*100,100):0;const budgetCard=document.createElement('div');budgetCard.className='card budget-mobile-v2';budgetCard.innerHTML=`<div class="budget-head-v2"><div><div class="budget-title-v2">Presupuesto restante</div><div class="budget-remaining-v2">${fmtMoney(remaining)}</div><div class="budget-total-v2">De un total de ${fmtMoney(totalBudget)}</div></div><button class="budget-action-v2" type="button">Ajustes de presupuestos <span aria-hidden="true">›</span></button></div><div class="budget-progress-v2"><strong>${Math.round(totalPct)}%</strong><div class="budget-track-v2"><div class="budget-fill-v2" style="width:${totalPct}%"></div></div><span>${fmtMoney(totalSpent)}</span></div>`;wrap.appendChild(budgetCard);const title=document.createElement('h2');title.className='summary-section-title-v2';title.innerHTML='<span>Gastos por categoría</span><span>↕ Mayor gasto</span>';wrap.appendChild(title);const list=document.createElement('div');list.className='summary-cat-list-v2';const icons={'Comida':'🍴','Entretenimiento':'🎮','Servicios':'⚙️','Salud':'❤️','Educación':'🎓','Barbería/peluquería':'✂️','Deudas':'💳','Higiene':'🧴','Transporte':'🚕','Auto':'🚗','Iglesia':'⛪','Vivienda':'🏠','Vestimenta':'👕','Otros':'📦','Ayuda':'🤝','Banco':'🏦'};cats.forEach(x=>{const pct=x.budget>0?x.spent/x.budget*100:(x.spent>0?100:0),available=x.budget-x.spent;const card=document.createElement('div');card.className='summary-cat-card-v2';card.innerHTML=`<div class="summary-cat-top-v2"><div class="summary-cat-icon-v2">${icons[x.c.nombre]||'📊'}</div><div><div class="summary-cat-name-v2">${escapeHtml(x.c.nombre)}</div><div class="summary-cat-budget-v2">Presupuesto: ${fmtMoney(x.budget)}</div></div><div class="summary-cat-side-v2"><span>Gastado</span><strong>${fmtMoney(x.spent)}</strong><span>Disponible</span><strong class="${available<0?'negative':''}">${fmtMoney(available)}</strong></div></div><div class="summary-cat-progress-v2"><div class="summary-cat-track-v2"><div class="summary-cat-fill-v2 ${pct>=100?'over':pct>=90?'warn':''}" style="width:${Math.min(pct,100)}%"></div></div><b>${Math.round(pct)}%</b></div>`;list.appendChild(card);});if(!cats.length)list.innerHTML='<div class="empty">Aún no tienes categorías con presupuesto o gastos este mes.</div>';wrap.appendChild(list);app.appendChild(wrap);budgetCard.querySelector('.budget-action-v2').onclick=()=>{currentTab='categorias';render();};document.getElementById('prevM').onclick=()=>{currentMonth=shiftMonth(currentMonth,-1);render();};document.getElementById('nextM').onclick=()=>{currentMonth=shiftMonth(currentMonth,1);render();};}
+function renderDashboardMobile(app){
+  const wrap=document.createElement('div');
+  wrap.className='mobile-summary-shell';
+
+  const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
+  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+Number(t.monto||0),0);
+
+  const monthNav=document.createElement('div');
+  monthNav.className='mobile-month-control';
+  monthNav.innerHTML=`
+    <button type="button" class="month-arrow" id="prevM" aria-label="Mes anterior">‹</button>
+    <button type="button" class="month-picker" id="mobileMonthPicker">
+      <span class="month-calendar">▣</span>
+      <strong>${monthLabel(currentMonth)}</strong>
+    </button>
+    <button type="button" class="month-arrow" id="nextM" aria-label="Mes siguiente">›</button>
+  `;
+  wrap.appendChild(monthNav);
+
+  const period=document.createElement('div');
+  period.className='mobile-period';
+  period.innerHTML='<span>Mensual</span><span class="period-chevron">⌄</span>';
+  wrap.appendChild(period);
+
+  const summary=document.createElement('div');
+  summary.className='mobile-money-card';
+  summary.innerHTML=`
+    <div class="mobile-money-stat income">
+      <div class="mobile-money-icon">↑</div>
+      <div><div class="mobile-money-label">Ingresos</div><div class="mobile-money-value">${fmtMoney(ingresos)}</div><div class="mobile-money-note">Total recibido este mes</div></div>
+    </div>
+    <div class="mobile-money-divider"></div>
+    <div class="mobile-money-stat expense">
+      <div class="mobile-money-icon">↓</div>
+      <div><div class="mobile-money-label">Gastos</div><div class="mobile-money-value">${fmtMoney(gastos)}</div><div class="mobile-money-note">Total gastado este mes</div></div>
+    </div>
+  `;
+  wrap.appendChild(summary);
+
+  const cats=state.categories
+    .filter(c=>c.tipo==='Gasto')
+    .map(c=>{
+      const budget=Number(categoryBudget(c))||0;
+      const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((sum,t)=>sum+Number(t.monto||0),0);
+      return {c,budget,spent};
+    })
+    .filter(x=>x.spent!==0||x.budget!==0)
+    .sort((a,b)=>b.spent-a.spent);
+
+  const totalBudget=cats.reduce((sum,x)=>sum+x.budget,0);
+  const totalSpent=cats.reduce((sum,x)=>sum+x.spent,0);
+  const remaining=totalBudget-totalSpent;
+  const totalPct=totalBudget>0?Math.min(totalSpent/totalBudget*100,100):0;
+
+  const budgetCard=document.createElement('div');
+  budgetCard.className='mobile-budget-card';
+  budgetCard.innerHTML=`
+    <div class="mobile-budget-head">
+      <div class="mobile-budget-icon">▣</div>
+      <div class="mobile-budget-copy">
+        <div class="mobile-budget-title">Presupuesto restante <span>(Mensual)</span></div>
+        <div class="mobile-budget-value">${fmtMoney(remaining)}</div>
+        <div class="mobile-budget-total">De un total de ${fmtMoney(totalBudget)}</div>
+      </div>
+      <button class="mobile-budget-action" type="button">Ajustes de presupuestos <span>›</span></button>
+    </div>
+    <div class="mobile-budget-progress">
+      <strong>${Math.round(totalPct)}%</strong>
+      <div class="mobile-budget-track"><div style="width:${totalPct}%"></div></div>
+      <strong>${Math.round(totalPct)}%</strong>
+    </div>
+  `;
+  wrap.appendChild(budgetCard);
+
+  const title=document.createElement('div');
+  title.className='mobile-category-heading';
+  title.innerHTML='<h2>Gastos por categoría</h2><button type="button" id="mobileSortCategories">↕ <span>Mayor gasto</span><b>⌄</b></button>';
+  wrap.appendChild(title);
+
+  const list=document.createElement('div');
+  list.className='mobile-category-list';
+  const icons={
+    'Comida':'🍴','Entretenimiento':'🎮','Servicios':'⚙️','Salud':'♥','Educación':'🎓',
+    'Barbería/peluquería':'✂️','Deudas':'▣','Higiene':'🧴','Transporte':'🚕','Auto':'🚗',
+    'Iglesia':'⛪','Vivienda':'⌂','Vestimenta':'👕','Otros':'▦','Ayuda':'♥','Banco':'▣'
+  };
+
+  cats.forEach(x=>{
+    const pct=x.budget>0?x.spent/x.budget*100:(x.spent>0?100:0);
+    const available=x.budget-x.spent;
+    const card=document.createElement('button');
+    card.type='button';
+    card.className='mobile-category-card';
+    card.innerHTML=`
+      <div class="mobile-category-main">
+        <div class="mobile-category-icon">${icons[x.c.nombre]||'📊'}</div>
+        <div class="mobile-category-info">
+          <div class="mobile-category-name">${escapeHtml(x.c.nombre)}</div>
+          <div class="mobile-category-budget">Presupuesto: ${fmtMoney(x.budget)}</div>
+        </div>
+        <div class="mobile-category-side">
+          <span>Gastado</span><strong class="spent">${fmtMoney(x.spent)}</strong>
+          <span>Disponible</span><strong class="${available<0?'negative':'available'}">${fmtMoney(available)}</strong>
+        </div>
+        <div class="mobile-category-chevron">›</div>
+      </div>
+      <div class="mobile-category-progress"><div class="track"><div class="${pct>=100?'over':pct>=90?'warn':''}" style="width:${Math.min(pct,100)}%"></div></div><b>${Math.round(pct)}%</b></div>
+    `;
+    card.onclick=()=>{
+      currentTab='categorias';
+      render();
+    };
+    list.appendChild(card);
+  });
+
+  if(!cats.length){
+    list.innerHTML='<div class="empty">Aún no tienes categorías con presupuesto o gastos este mes.</div>';
+  }
+
+  wrap.appendChild(list);
+  app.appendChild(wrap);
+
+  budgetCard.querySelector('.mobile-budget-action').onclick=()=>{
+    currentTab='categorias';
+    render();
+  };
+  document.getElementById('prevM').onclick=()=>{currentMonth=shiftMonth(currentMonth,-1);render();};
+  document.getElementById('nextM').onclick=()=>{currentMonth=shiftMonth(currentMonth,1);render();};
+}
 function renderDashboard(app){
   if(window.innerWidth<=600){ renderDashboardMobile(app); return; }
   const wrap = document.createElement('div');
@@ -2322,6 +2547,41 @@ document.addEventListener('click', async (event) => {
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
   new MutationObserver(()=>{init();hookBudget();}).observe(document.body,{childList:true,subtree:true});
   window.addEventListener('resize',boot);
+})();
+</script>
+
+<script>
+/* MOBILE_FRONT_V4 */
+(function(){
+  if(window.__mobileFrontV4)return;
+  window.__mobileFrontV4=true;
+  function refreshActive(){
+    const nav=document.getElementById('mobileBottomNav');
+    if(!nav)return;
+    nav.querySelectorAll('[data-mobile-tab]').forEach(b=>b.classList.toggle('active',b.dataset.mobileTab===currentTab));
+  }
+  function bind(){
+    const nav=document.getElementById('mobileBottomNav');
+    if(!nav)return;
+    nav.querySelectorAll('[data-mobile-tab]').forEach(b=>{
+      if(b.dataset.bound)return;
+      b.dataset.bound='1';
+      b.onclick=()=>{currentTab=b.dataset.mobileTab;render();setTimeout(refreshActive,0);};
+    });
+    const plus=document.getElementById('mobileAddTransaction');
+    if(plus&&!plus.dataset.bound){plus.dataset.bound='1';plus.onclick=()=>openManualForm();}
+    const more=document.getElementById('mobileMore');
+    if(more&&!more.dataset.bound){
+      more.dataset.bound='1';
+      more.onclick=()=>{
+        const center=document.querySelector('#mobileRadialMenu .radial-center');
+        if(center)center.click();
+      };
+    }
+    refreshActive();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind);else bind();
+  new MutationObserver(bind).observe(document.body,{childList:true,subtree:true});
 })();
 </script>
 </body>
