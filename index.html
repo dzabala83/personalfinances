@@ -2027,5 +2027,47 @@ document.getElementById('logoutBtn').onclick=async()=>{
   });
 })();
 </script>
+<script>
+/* FIX BACKUP: borrar solo transacciones */
+document.addEventListener('click', async (event) => {
+  const btn = event.target.closest('#resetBtn');
+  if (!btn) return;
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+  if (!currentUser) {
+    showToast('Debes iniciar sesión para borrar los datos.');
+    return;
+  }
+  const ok = await showTimedDeleteConfirm({
+    title:'Borrar todos los datos',
+    message:'Se eliminarán de forma permanente todas las transacciones de esta cuenta. Tus categorías, subcategorías, reglas y presupuestos permanecerán intactos.',
+    detail:'Las credenciales de acceso NO se eliminan.',
+    confirmText:'Borrar todas las transacciones'
+  });
+  if (!ok) return;
+  btn.disabled = true;
+  btn.textContent = 'Borrando…';
+  try {
+    const { error } = await supabaseClient
+      .from('transacciones')
+      .delete()
+      .eq('usuario_id', currentUser.id);
+    if (error) throw error;
+    state.transactions = [];
+    saveLocal();
+    cloudActive = true;
+    showToast('Todas las transacciones fueron eliminadas');
+    currentTab = 'dashboard';
+    render();
+  } catch (err) {
+    console.error('Error borrando transacciones:', err);
+    showToast('No se pudieron borrar las transacciones de la nube');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Borrar todos los datos';
+  }
+}, true);
+</script>
 </body>
 </html>
