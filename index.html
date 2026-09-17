@@ -181,7 +181,7 @@ canvas{max-height:260px;}
 .mobile-month-control .month-arrow{height:58px;border:1px solid #e7ebf2;background:var(--card);border-radius:18px;color:#0b255d;font-size:2rem;line-height:1;}
 .mobile-month-control .month-picker{height:58px;border:1px solid #e7ebf2;background:var(--card);border-radius:18px;color:#0b255d;display:flex;align-items:center;justify-content:center;gap:14px;font-size:1.05rem;}
 .mobile-month-control .month-calendar{font-size:1.35rem;}
-.mobile-period{margin-left:auto;width:215px;height:58px;border:1px solid #e7ebf2;border-radius:18px;background:var(--card);display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:1rem;color:#102b62;margin-bottom:12px;appearance:auto;}
+.mobile-period{margin-left:auto;width:215px;height:58px;border:1px solid #e7ebf2;border-radius:18px;background:var(--card);display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:1rem;color:#102b62;margin-bottom:12px;}
 .mobile-period .period-chevron{font-size:1.6rem;}
 .mobile-money-card{border-radius:18px;padding:18px 20px;display:grid;grid-template-columns:1fr 1px 1fr;gap:18px;align-items:center;margin-bottom:12px;}
 .mobile-money-stat{display:flex;align-items:center;gap:14px;min-width:0;}
@@ -739,8 +739,6 @@ function getCategory(tipo, nombre){
 /* ================= APP STATE ================= */
 let currentTab = 'dashboard';
 let currentMonth = todayKey();
-let dashboardPeriod = 'monthly';
-let dashboardDate = new Date().toISOString().slice(0,10);
 
 // Filtros de transacciones: se conservan al editar/guardar una transacción.
 let txFilterState = {
@@ -804,86 +802,29 @@ function render(){
 }
 
 /* ================= DASHBOARD ================= */
-function getDashboardPeriodInfo(){
-  if(dashboardPeriod==='daily'){
-    return {
-      label: new Date(dashboardDate+'T00:00:00').toLocaleDateString('es-BO',{day:'numeric',month:'long',year:'numeric'}),
-      shortLabel: 'Diario',
-      start: dashboardDate,
-      end: dashboardDate,
-      budgetFactor: 1 / new Date(dashboardDate+'T00:00:00').getDate() // se reemplaza abajo por días del mes
-    };
-  }
-  if(dashboardPeriod==='quarterly'){
-    const [y,m]=currentMonth.split('-').map(Number);
-    const q=Math.floor((m-1)/3);
-    const startMonth=q*3+1;
-    const endMonth=startMonth+2;
-    const start=y+'-'+String(startMonth).padStart(2,'0');
-    const end=y+'-'+String(endMonth).padStart(2,'0');
-    return {
-      label: 'Trimestre '+(q+1)+' · '+y,
-      shortLabel: 'Trimestral',
-      start,
-      end: y+'-'+String(endMonth).padStart(2,'0'),
-      budgetFactor: 3
-    };
-  }
-  return {
-    label: monthLabel(currentMonth),
-    shortLabel: 'Mensual',
-    start: currentMonth,
-    end: currentMonth,
-    budgetFactor: 1
-  };
-}
-function dashboardTransactions(){
-  const info=getDashboardPeriodInfo();
-  return (state.transactions||[]).filter(t=>{
-    const d=(t.fecha||'').slice(0,10);
-    if(dashboardPeriod==='daily') return d===info.start;
-    return monthKey(d)>=info.start && monthKey(d)<=info.end;
-  });
-}
-function dashboardBudgetForCategory(c){
-  const monthly=Number(categoryBudget(c))||0;
-  if(!monthly) return 0;
-  if(dashboardPeriod==='daily'){
-    const d=new Date(dashboardDate+'T00:00:00');
-    const days=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
-    return monthly/days;
-  }
-  if(dashboardPeriod==='quarterly') return monthly*3;
-  return monthly;
-}
 function renderDashboardMobile(app){
   const wrap=document.createElement('div');
   wrap.className='mobile-summary-shell';
 
-  const info=getDashboardPeriodInfo();
-  const txPeriod=dashboardTransactions();
-  const ingresos=txPeriod.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+Number(t.monto||0),0);
-  const gastos=txPeriod.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+Number(t.monto||0),0);
-  const balance=ingresos-gastos;
+  const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
+  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+Number(t.monto||0),0);
 
   const monthNav=document.createElement('div');
   monthNav.className='mobile-month-control';
   monthNav.innerHTML=`
-    <button type="button" class="month-arrow" id="prevM" aria-label="Periodo anterior">‹</button>
+    <button type="button" class="month-arrow" id="prevM" aria-label="Mes anterior">‹</button>
     <button type="button" class="month-picker" id="mobileMonthPicker">
       <span class="month-calendar">▣</span>
-      <strong>${info.label}</strong>
+      <strong>${monthLabel(currentMonth)}</strong>
     </button>
-    <button type="button" class="month-arrow" id="nextM" aria-label="Periodo siguiente">›</button>
+    <button type="button" class="month-arrow" id="nextM" aria-label="Mes siguiente">›</button>
   `;
   wrap.appendChild(monthNav);
 
-  const period=document.createElement('select');
+  const period=document.createElement('div');
   period.className='mobile-period';
-  period.id='mobilePeriodSelect';
-  period.innerHTML='<option value="daily">Diario</option><option value="monthly">Mensual</option><option value="quarterly">Trimestral</option>';
-  period.value=dashboardPeriod;
-  period.title='Periodo del resumen';
+  period.innerHTML='<span>Mensual</span><span class="period-chevron">⌄</span>';
   wrap.appendChild(period);
 
   const summary=document.createElement('div');
@@ -891,12 +832,12 @@ function renderDashboardMobile(app){
   summary.innerHTML=`
     <div class="mobile-money-stat income">
       <div class="mobile-money-icon">↑</div>
-      <div><div class="mobile-money-label">Ingresos</div><div class="mobile-money-value">${fmtMoney(ingresos)}</div><div class="mobile-money-note">Total recibido ${dashboardPeriod==='daily'?'ese día':dashboardPeriod==='quarterly'?'este trimestre':'este mes'}</div></div>
+      <div><div class="mobile-money-label">Ingresos</div><div class="mobile-money-value">${fmtMoney(ingresos)}</div><div class="mobile-money-note">Total recibido este mes</div></div>
     </div>
     <div class="mobile-money-divider"></div>
     <div class="mobile-money-stat expense">
       <div class="mobile-money-icon">↓</div>
-      <div><div class="mobile-money-label">Gastos</div><div class="mobile-money-value">${fmtMoney(gastos)}</div><div class="mobile-money-note">Total gastado ${dashboardPeriod==='daily'?'ese día':dashboardPeriod==='quarterly'?'este trimestre':'este mes'}</div></div>
+      <div><div class="mobile-money-label">Gastos</div><div class="mobile-money-value">${fmtMoney(gastos)}</div><div class="mobile-money-note">Total gastado este mes</div></div>
     </div>
   `;
   wrap.appendChild(summary);
@@ -904,8 +845,8 @@ function renderDashboardMobile(app){
   const cats=state.categories
     .filter(c=>c.tipo==='Gasto')
     .map(c=>{
-      const budget=dashboardBudgetForCategory(c);
-      const spent=txPeriod.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((sum,t)=>sum+Number(t.monto||0),0);
+      const budget=Number(categoryBudget(c))||0;
+      const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((sum,t)=>sum+Number(t.monto||0),0);
       return {c,budget,spent};
     })
     .filter(x=>x.spent!==0||x.budget!==0)
@@ -922,7 +863,7 @@ function renderDashboardMobile(app){
     <div class="mobile-budget-head">
       <div class="mobile-budget-icon">▣</div>
       <div class="mobile-budget-copy">
-        <div class="mobile-budget-title">Presupuesto restante <span>(${info.shortLabel})</span></div>
+        <div class="mobile-budget-title">Presupuesto restante <span>(Mensual)</span></div>
         <div class="mobile-budget-value">${fmtMoney(remaining)}</div>
         <div class="mobile-budget-total">De un total de ${fmtMoney(totalBudget)}</div>
       </div>
@@ -970,66 +911,27 @@ function renderDashboardMobile(app){
       </div>
       <div class="mobile-category-progress"><div class="track"><div class="${pct>=100?'over':pct>=90?'warn':''}" style="width:${Math.min(pct,100)}%"></div></div><b>${Math.round(pct)}%</b></div>
     `;
-    card.onclick=()=>{ currentTab='categorias'; render(); };
+    card.onclick=()=>{
+      currentTab='categorias';
+      render();
+    };
     list.appendChild(card);
   });
 
   if(!cats.length){
-    list.innerHTML='<div class="empty">No hay categorías con presupuesto o gastos en este periodo.</div>';
+    list.innerHTML='<div class="empty">Aún no tienes categorías con presupuesto o gastos este mes.</div>';
   }
 
   wrap.appendChild(list);
   app.appendChild(wrap);
 
-  budgetCard.querySelector('.mobile-budget-action').onclick=()=>{ currentTab='categorias'; render(); };
-  period.onchange=()=>{ dashboardPeriod=period.value; render(); };
-
-  document.getElementById('prevM').onclick=()=>{
-    if(dashboardPeriod==='daily'){
-      const d=new Date(dashboardDate+'T00:00:00'); d.setDate(d.getDate()-1);
-      dashboardDate=d.toISOString().slice(0,10); currentMonth=dashboardDate.slice(0,7);
-    }else if(dashboardPeriod==='quarterly'){
-      currentMonth=shiftMonth(currentMonth,-3);
-    }else{
-      currentMonth=shiftMonth(currentMonth,-1);
-    }
+  budgetCard.querySelector('.mobile-budget-action').onclick=()=>{
+    currentTab='categorias';
     render();
   };
-  document.getElementById('nextM').onclick=()=>{
-    if(dashboardPeriod==='daily'){
-      const d=new Date(dashboardDate+'T00:00:00'); d.setDate(d.getDate()+1);
-      dashboardDate=d.toISOString().slice(0,10); currentMonth=dashboardDate.slice(0,7);
-    }else if(dashboardPeriod==='quarterly'){
-      currentMonth=shiftMonth(currentMonth,3);
-    }else{
-      currentMonth=shiftMonth(currentMonth,1);
-    }
-    render();
-  };
-  document.getElementById('mobileMonthPicker').onclick=()=>{
-    const input=document.createElement('input');
-    input.type=dashboardPeriod==='daily' ? 'date' : 'month';
-    input.value=dashboardPeriod==='daily' ? dashboardDate : currentMonth;
-    input.style.cssText='position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;';
-    document.body.appendChild(input);
-    const apply=()=>{
-      if(!input.value) return;
-      if(dashboardPeriod==='daily'){
-        dashboardDate=input.value;
-        currentMonth=input.value.slice(0,7);
-      }else{
-        currentMonth=input.value;
-        if(dashboardPeriod==='monthly') dashboardDate=currentMonth+'-01';
-      }
-      render();
-      input.remove();
-    };
-    input.onchange=apply;
-    input.onblur=()=>setTimeout(()=>{try{input.remove();}catch(e){}},300);
-    if(input.showPicker){ try{input.showPicker();}catch(e){input.focus();} } else input.focus();
-  };
+  document.getElementById('prevM').onclick=()=>{currentMonth=shiftMonth(currentMonth,-1);render();};
+  document.getElementById('nextM').onclick=()=>{currentMonth=shiftMonth(currentMonth,1);render();};
 }
-
 function renderDashboard(app){
   if(window.innerWidth<=600){ renderDashboardMobile(app); return; }
   const wrap = document.createElement('div');
