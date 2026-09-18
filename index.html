@@ -2612,16 +2612,22 @@ document.addEventListener('click', async (event) => {
     const go=(tab)=>{
       close();
       currentTab=tab;
-      render();
+      setTimeout(()=>render(),0);
     };
     const bindAction=(sel,action)=>{
       const b=menu.querySelector(sel);
       if(!b)return;
-      b.onclick=e=>{
+      let handled=false;
+      const run=(e)=>{
         e.preventDefault();
         e.stopPropagation();
+        if(handled)return;
+        handled=true;
         action();
+        setTimeout(()=>{handled=false;},400);
       };
+      b.addEventListener('touchend',run,{passive:false});
+      b.addEventListener('click',run);
     };
     bindAction('.radial-pend',()=>go('pendientes'));
     bindAction('.radial-cat',()=>go('categorias'));
