@@ -235,9 +235,8 @@ canvas{max-height:260px;}
 .mobile-bottom-nav{display:none;}
 @media(max-width:600px){
   body{background:#f7f9fc;padding-bottom:78px;}
-  header{background:transparent;border:0;text-align:left;padding:18px 70px 8px 18px;min-height:82px;}
-  header h1{font-size:1.25rem;color:#09275f;margin-bottom:4px;}
-  header p{font-size:.78rem;}
+  header{background:transparent;border:0;text-align:left;padding:0 70px 0 18px;min-height:8px;height:8px;}
+  header h1,header p{display:none;}
   header #logoutBtn{display:none!important;}
   #tabNav{display:none!important;}
   main{max-width:none;padding:6px 12px 0;}
@@ -255,7 +254,7 @@ canvas{max-height:260px;}
   .mobile-category-progress{margin-left:56px;}
   .mobile-category-side{font-size:.68rem;}
   .mobile-category-side strong{font-size:.76rem;}
-  .mobile-bottom-nav{position:fixed;left:0;right:0;bottom:0;height:72px;background:rgba(255,255,255,.97);border-top:1px solid #e4e8ef;z-index:80;display:grid;grid-template-columns:1fr 1fr 76px 1fr 1fr;align-items:center;padding:0 6px env(safe-area-inset-bottom);}
+  .mobile-bottom-nav{position:fixed;left:0;right:0;bottom:0;height:72px;background:rgba(255,255,255,.97);border-top:1px solid #e4e8ef;z-index:80;display:grid;grid-template-columns:1fr 76px 1fr;align-items:center;padding:0 28px env(safe-area-inset-bottom);}
   .mobile-bottom-nav button{border:0;background:transparent;color:#718097;font-size:.68rem;display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px 0;}
   .mobile-bottom-nav button .mb-icon{font-size:1.45rem;line-height:1;}
   .mobile-bottom-nav button.active{color:#1769dc;}
@@ -309,11 +308,9 @@ canvas{max-height:260px;}
 
 <div class="toast" id="toast"></div>
 <div id="mobileBottomNav" class="mobile-bottom-nav" aria-label="Navegación móvil">
-  <button type="button" data-mobile-tab="dashboard"><span class="mb-icon">⌂</span><span>Inicio</span></button>
   <button type="button" data-mobile-tab="dashboard" class="active"><span class="mb-icon">▥</span><span>Resumen</span></button>
   <button type="button" class="mb-plus" id="mobileAddTransaction" aria-label="Agregar transacción">+</button>
   <button type="button" data-mobile-tab="transacciones"><span class="mb-icon">▤</span><span>Transacciones</span></button>
-  <button type="button" id="mobileMore"><span class="mb-icon">•••</span><span>Más</span></button>
 </div>
 
 <script>
@@ -2491,27 +2488,25 @@ document.addEventListener('click', async (event) => {
 })();
 </script>
 
-<style id="radial-menu-mobile-v1">
+<style id="radial-menu-mobile-v2">
 @media(max-width:600px){
-  #mobileRadialMenu{display:block;position:fixed;top:14px;right:12px;width:190px;height:190px;z-index:50;pointer-events:none;}
-  #mobileRadialMenu .radial-center{position:absolute;right:0;top:0;width:50px;height:50px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:1.35rem;font-weight:800;box-shadow:0 3px 12px rgba(0,0,0,.12);cursor:pointer;pointer-events:auto;}
-  #mobileRadialMenu.open .radial-center{background:var(--accent);color:#fff;border-color:var(--accent);}
-  #mobileRadialMenu .radial-item{position:absolute;width:74px;height:58px;border-radius:18px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.72rem;font-weight:700;box-shadow:0 3px 12px rgba(0,0,0,.10);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;opacity:0;transform:scale(.65);transition:opacity .18s ease,transform .18s ease;pointer-events:none;}
-  #mobileRadialMenu.open .radial-item{opacity:1;transform:scale(1);pointer-events:auto;}
-  #mobileRadialMenu .radial-pend{right:42px;top:58px;}
-  #mobileRadialMenu .radial-cat{right:102px;top:112px;}
-  #mobileRadialMenu .radial-backup{right:-2px;top:122px;}
-  #mobileRadialMenu .radial-item .ri{font-size:1.15rem;line-height:1;}
+  #mobileRadialMenu{display:block;position:fixed;inset:0;z-index:100;pointer-events:none;}
+  #mobileRadialMenu .radial-center{position:absolute;right:12px;top:14px;width:50px;height:50px;border-radius:50%;border:1px solid rgba(220,226,235,.9);background:rgba(255,255,255,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);color:#0b255d;font-size:1.35rem;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.12);cursor:pointer;pointer-events:auto;}
+  #mobileRadialMenu.open .radial-center{background:rgba(255,255,255,.82);color:#0b255d;}
+  #mobileRadialMenu .radial-panel{position:absolute;right:10px;bottom:92px;width:64px;padding:12px 8px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:rgba(225,233,242,.48);backdrop-filter:blur(24px) saturate(140%);-webkit-backdrop-filter:blur(24px) saturate(140%);box-shadow:0 8px 28px rgba(30,50,80,.18);display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transform:translateX(18px);transition:opacity .18s ease,transform .18s ease;pointer-events:none;}
+  #mobileRadialMenu.open .radial-panel{opacity:1;transform:translateX(0);pointer-events:auto;}
+  #mobileRadialMenu .radial-item{position:static;width:48px;height:48px;padding:0;border:0;border-radius:16px;background:transparent;color:#102b62;font-size:0;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:none;opacity:1;transform:none;pointer-events:auto;}
+  #mobileRadialMenu .radial-item .ri{font-size:1.55rem;line-height:1;}
+  #mobileRadialMenu .radial-logout{border-top:1px solid rgba(120,135,155,.25);border-radius:0;width:48px;padding-top:12px;margin-top:2px;color:#d9272e;}
   nav button[data-mobile-radial-hidden="1"]{display:none!important;}
   header{padding-right:74px;}
-  .budget-mobile-v1 .budget-action{cursor:pointer;}
 }
 @media(min-width:601px){#mobileRadialMenu{display:none!important;}}
 </style><script>
-/* RADIAL_MENU_MOBILE_V1 */
+/* RADIAL_MENU_MOBILE_V2 */
 (function(){
-  if(window.__radialMenuMobileV1)return;
-  window.__radialMenuMobileV1=true;
+  if(window.__radialMenuMobileV2)return;
+  window.__radialMenuMobileV2=true;
   function init(){
     if(document.getElementById('mobileRadialMenu'))return;
     const nav=document.querySelector('nav');
@@ -2520,20 +2515,41 @@ document.addEventListener('click', async (event) => {
     const pending=findBtn('pendientes');
     const categories=findBtn('categorías')||findBtn('categorias');
     const backup=findBtn('backup');
-    if(!pending&&!categories&&!backup)return;
+    const logout=document.getElementById('logoutBtn');
+    if(!pending&&!categories&&!backup&&!logout)return;
     [pending,categories,backup].filter(Boolean).forEach(b=>b.dataset.mobileRadialHidden='1');
+
     const menu=document.createElement('div');
     menu.id='mobileRadialMenu';
-    menu.innerHTML='<button class="radial-center" type="button" aria-label="Abrir menú">•••</button>'+
-      '<button class="radial-item radial-pend" type="button"><span class="ri">❓</span><span>Pendientes</span></button>'+
-      '<button class="radial-item radial-cat" type="button"><span class="ri">🏷️</span><span>Categorías</span></button>'+
-      '<button class="radial-item radial-backup" type="button"><span class="ri">💾</span><span>Backup</span></button>';
+    menu.innerHTML=
+      '<button class="radial-center" type="button" aria-label="Abrir menú">☰</button>'+
+      '<div class="radial-panel" aria-label="Menú rápido">'+
+        '<button class="radial-item radial-pend" type="button" aria-label="Pendientes"><span class="ri">❓</span></button>'+
+        '<button class="radial-item radial-cat" type="button" aria-label="Categorías"><span class="ri">🏷️</span></button>'+
+        '<button class="radial-item radial-backup" type="button" aria-label="Backup"><span class="ri">💾</span></button>'+
+        '<button class="radial-item radial-logout" type="button" aria-label="Cerrar sesión"><span class="ri">↪</span></button>'+
+      '</div>';
     document.body.appendChild(menu);
+
     const center=menu.querySelector('.radial-center');
-    center.onclick=()=>{menu.classList.toggle('open');center.textContent=menu.classList.contains('open')?'×':'•••';};
-    const bind=(sel,orig)=>{const b=menu.querySelector(sel);if(!b||!orig)return;b.onclick=()=>{menu.classList.remove('open');center.textContent='•••';orig.click();};};
-    bind('.radial-pend',pending);bind('.radial-cat',categories);bind('.radial-backup',backup);
-    document.addEventListener('click',e=>{if(menu.classList.contains('open')&&!menu.contains(e.target)){menu.classList.remove('open');center.textContent='•••';}},true);
+    const panel=menu.querySelector('.radial-panel');
+    const close=()=>{menu.classList.remove('open');};
+    center.onclick=(e)=>{e.stopPropagation();menu.classList.toggle('open');};
+
+    const bind=(sel,orig)=>{
+      const b=menu.querySelector(sel);
+      if(!b||!orig)return;
+      b.onclick=(e)=>{e.stopPropagation();close();orig.click();};
+    };
+    bind('.radial-pend',pending);
+    bind('.radial-cat',categories);
+    bind('.radial-backup',backup);
+    bind('.radial-logout',logout);
+
+    document.addEventListener('click',e=>{
+      if(menu.classList.contains('open') && !panel.contains(e.target) && e.target!==center) close();
+    },true);
+
     const goCategories=()=>{if(categories)categories.click();};
     window.__goBudgetCategories=goCategories;
   }
