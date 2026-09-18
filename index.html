@@ -2609,15 +2609,27 @@ document.addEventListener('click', async (event) => {
     });
     center.addEventListener('pointercancel',()=>{dragging=false;center.classList.remove('dragging');});
 
-    const bind=(sel,orig)=>{
-      const b=menu.querySelector(sel);
-      if(!b||!orig)return;
-      b.onclick=e=>{e.stopPropagation();close();orig.click();};
+    const go=(tab)=>{
+      close();
+      currentTab=tab;
+      render();
     };
-    bind('.radial-pend',pending);
-    bind('.radial-cat',categories);
-    bind('.radial-backup',backup);
-    bind('.radial-logout',logout);
+    const bindAction=(sel,action)=>{
+      const b=menu.querySelector(sel);
+      if(!b)return;
+      b.onclick=e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        action();
+      };
+    };
+    bindAction('.radial-pend',()=>go('pendientes'));
+    bindAction('.radial-cat',()=>go('categorias'));
+    bindAction('.radial-backup',()=>go('backup'));
+    bindAction('.radial-logout',()=>{
+      close();
+      if(logout) logout.click();
+    });
 
     document.addEventListener('click',e=>{
       if(menu.classList.contains('open')&&!menu.contains(e.target))close();
