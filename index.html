@@ -308,7 +308,7 @@ canvas{max-height:260px;}
 
 <div class="toast" id="toast"></div>
 <div id="mobileBottomNav" class="mobile-bottom-nav" aria-label="Navegación móvil">
-  <button type="button" data-mobile-tab="dashboard" class="active"><span class="mb-icon">▥</span><span>Resumen</span></button>
+  <button type="button" id="mobileLogout" class="mobile-logout" aria-label="Cerrar sesión"><span class="mb-icon">↪</span><span>Cerrar sesión</span></button>
   <button type="button" class="mb-plus" id="mobileAddTransaction" aria-label="Agregar transacción">+</button>
   <button type="button" data-mobile-tab="transacciones"><span class="mb-icon">▤</span><span>Transacciones</span></button>
 </div>
@@ -2491,13 +2491,15 @@ document.addEventListener('click', async (event) => {
 <style id="radial-menu-mobile-v2">
 @media(max-width:600px){
   #mobileRadialMenu{display:block;position:fixed;inset:0;z-index:100;pointer-events:none;}
-  #mobileRadialMenu .radial-center{position:absolute;right:12px;top:14px;width:50px;height:50px;border-radius:50%;border:1px solid rgba(220,226,235,.9);background:rgba(255,255,255,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);color:#0b255d;font-size:1.35rem;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.12);cursor:pointer;pointer-events:auto;}
+  #mobileRadialMenu .radial-center{position:fixed;right:16px;bottom:88px;width:50px;height:50px;border-radius:50%;border:1px solid rgba(220,226,235,.9);background:rgba(255,255,255,.82);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);color:#0b255d;font-size:1.35rem;font-weight:800;box-shadow:0 4px 16px rgba(0,0,0,.12);cursor:pointer;pointer-events:auto;}
   #mobileRadialMenu.open .radial-center{background:rgba(255,255,255,.82);color:#0b255d;}
-  #mobileRadialMenu .radial-panel{position:absolute;right:10px;bottom:92px;width:64px;padding:12px 8px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:rgba(225,233,242,.48);backdrop-filter:blur(24px) saturate(140%);-webkit-backdrop-filter:blur(24px) saturate(140%);box-shadow:0 8px 28px rgba(30,50,80,.18);display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transform:translateX(18px);transition:opacity .18s ease,transform .18s ease;pointer-events:none;}
+  #mobileRadialMenu .radial-panel{position:fixed;right:10px;bottom:150px;width:64px;padding:12px 8px;border:1px solid rgba(255,255,255,.7);border-radius:24px;background:rgba(225,233,242,.48);backdrop-filter:blur(24px) saturate(140%);-webkit-backdrop-filter:blur(24px) saturate(140%);box-shadow:0 8px 28px rgba(30,50,80,.18);display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0;transform:translateX(18px);transition:opacity .18s ease,transform .18s ease;pointer-events:none;}
   #mobileRadialMenu.open .radial-panel{opacity:1;transform:translateX(0);pointer-events:auto;}
   #mobileRadialMenu .radial-item{position:static;width:48px;height:48px;padding:0;border:0;border-radius:16px;background:transparent;color:#102b62;font-size:0;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:none;opacity:1;transform:none;pointer-events:auto;}
   #mobileRadialMenu .radial-item .ri{font-size:1.55rem;line-height:1;}
   #mobileRadialMenu .radial-logout{border-top:1px solid rgba(120,135,155,.25);border-radius:0;width:48px;padding-top:12px;margin-top:2px;color:#d9272e;}
+  #mobileBottomNav .mobile-logout{color:#d9272e;}
+  #mobileBottomNav .mobile-logout .mb-icon{font-size:1.5rem;}
   nav button[data-mobile-radial-hidden="1"]{display:none!important;}
   header{padding-right:74px;}
 }
@@ -2541,10 +2543,10 @@ document.addEventListener('click', async (event) => {
       if(!b||!orig)return;
       b.onclick=(e)=>{e.stopPropagation();close();orig.click();};
     };
-    bind('.radial-pend',pending);
-    bind('.radial-cat',categories);
-    bind('.radial-backup',backup);
-    bind('.radial-logout',logout);
+    bind('.radial-pend',pending);      // ? → Pendientes
+    bind('.radial-cat',categories);   // etiqueta → Categorías
+    bind('.radial-backup',backup);    // cassette → Backup
+    bind('.radial-logout',logout);    // salida → Cerrar sesión
 
     document.addEventListener('click',e=>{
       if(menu.classList.contains('open') && !panel.contains(e.target) && e.target!==center) close();
@@ -2587,6 +2589,12 @@ document.addEventListener('click', async (event) => {
     });
     const plus=document.getElementById('mobileAddTransaction');
     if(plus&&!plus.dataset.bound){plus.dataset.bound='1';plus.onclick=()=>openManualForm();}
+    const mobileLogout=document.getElementById('mobileLogout');
+    const logoutBtn=document.getElementById('logoutBtn');
+    if(mobileLogout&&!mobileLogout.dataset.bound){
+      mobileLogout.dataset.bound='1';
+      mobileLogout.onclick=()=>{if(logoutBtn)logoutBtn.click();};
+    }
     const more=document.getElementById('mobileMore');
     if(more&&!more.dataset.bound){
       more.dataset.bound='1';
