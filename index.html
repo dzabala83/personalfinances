@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mi Asistente Financiero</title>
+<title>NEXO FINANZAS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -277,27 +277,44 @@ canvas{max-height:260px;}
             #filterMonth,#filterTipo,#txCatFilter,#txSubFilter,#txAccountFilter,#txStatusFilter,#txDateFrom,#txDateTo,#txMinAmount,#txMaxAmount{min-height:42px;}
             #applyTxFilters,#clearTxFilters,#addManualBtn{min-height:44px;}
           }
-          </style></head>
+          </style><style id="nexo-login-v1">
+.nexo-auth-gate{position:fixed;inset:0;z-index:9999;overflow:auto;background:linear-gradient(145deg,#f5f9ff,#eef5ff 52%,#f8fbff);display:flex;align-items:center;justify-content:center;padding:22px 16px;color:#102b62}
+.nexo-login{width:min(430px,100%)} .nexo-brand{text-align:center;margin-bottom:18px}
+.nexo-brand-name{font-size:3.1rem;line-height:.95;font-weight:850;letter-spacing:.04em;color:#0b2a72}.nexo-brand-sub{font-size:.95rem;letter-spacing:.38em;font-weight:500;color:#1769dc;margin:8px 0 7px 5px}.nexo-brand p{margin:0;color:#7180a0;font-size:.88rem}
+.nexo-login-card{background:rgba(255,255,255,.94);border:1px solid rgba(220,228,240,.9);border-radius:24px;padding:24px 20px 22px;box-shadow:0 12px 36px rgba(24,64,120,.09)}
+.nexo-login-heading{text-align:center;margin-bottom:18px}.nexo-login-heading h2{margin:0;color:#0b2a72;font-size:1.7rem}.nexo-login-heading p{margin:5px 0 0;color:#7b88a3;font-size:.84rem}
+.nexo-field{margin-bottom:11px}.nexo-field label{font-size:.72rem;margin:0 0 5px 3px;color:#7180a0}.nexo-field input{height:46px;width:100%;padding:0 13px;border-radius:13px;border:1px solid #dce5f1;background:#f9fbfe;color:#102b62;font-size:.9rem;outline:none}.nexo-field input:focus{border-color:#4b91ed;box-shadow:0 0 0 3px rgba(37,99,235,.10)}
+.nexo-password-wrap{position:relative}.nexo-password-wrap input{padding-right:46px}.nexo-eye{position:absolute;right:5px;top:5px;width:36px;height:36px;border:0;border-radius:10px;background:transparent;color:#526a99;font-size:1rem;cursor:pointer}
+.nexo-remember{display:flex;align-items:center;gap:10px;margin:4px 0 14px;padding:10px 11px;border:1px solid #dce9fa;border-radius:13px;background:#f4f8ff;cursor:pointer}.nexo-remember input{position:absolute;opacity:0;pointer-events:none}.nexo-check{width:21px;height:21px;flex:0 0 21px;border-radius:6px;border:2px solid #8aa4cc;background:#fff;position:relative}.nexo-remember input:checked+.nexo-check{background:#1769dc;border-color:#1769dc}.nexo-remember input:checked+.nexo-check:after{content:'✓';position:absolute;left:3px;top:-2px;color:#fff;font-size:16px;font-weight:800}.nexo-remember-copy{display:flex;flex-direction:column;gap:2px;min-width:0}.nexo-remember-copy strong{font-size:.8rem;color:#102b62}.nexo-remember-copy small{font-size:.68rem;color:#7a879d}
+.nexo-login-btn{width:100%;height:46px;border-radius:13px;font-size:.9rem;background:#1769dc;box-shadow:0 7px 16px rgba(23,105,220,.20)}.nexo-divider{display:flex;align-items:center;gap:10px;margin:16px 0 10px;color:#8a97ae;font-size:.72rem}.nexo-divider:before,.nexo-divider:after{content:'';height:1px;background:#e3e8f0;flex:1}
+.nexo-face-btn{width:58px;height:58px;margin:0 auto;border:1px solid #dce7f6;border-radius:50%;background:#edf5ff;color:#123f96;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(30,80,150,.07)}.nexo-face-icon{font-size:2.15rem;line-height:1;display:block;transform:rotate(90deg)}.nexo-face-btn:active{transform:scale(.97)}
+.nexo-login-msg{min-height:18px;margin-top:9px;text-align:center;color:#7180a0;font-size:.75rem}
+@media(max-width:600px){.nexo-auth-gate{align-items:flex-start;padding:34px 14px 24px}.nexo-login{width:min(390px,100%)}.nexo-brand{margin-bottom:14px}.nexo-brand-name{font-size:2.55rem}.nexo-brand-sub{font-size:.78rem;letter-spacing:.34em;margin-top:6px}.nexo-brand p{font-size:.78rem}.nexo-login-card{border-radius:21px;padding:20px 16px 18px}.nexo-login-heading{margin-bottom:15px}.nexo-login-heading h2{font-size:1.45rem}.nexo-field input{height:44px}.nexo-remember{margin-bottom:12px;padding:9px 10px}.nexo-remember-copy strong{font-size:.76rem}.nexo-remember-copy small{font-size:.64rem}.nexo-login-btn{height:44px}}
+</style></head>
 <body>
 
-<div id="authGate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;">
-  <div class="card" style="width:min(420px,100%);">
-    <div style="text-align:center;margin-bottom:20px;">
-      <div style="font-size:2.2rem;">💰</div>
-      <h2 style="margin:8px 0 4px;">Mi Asistente Financiero</h2>
-      <p style="color:var(--muted);margin:0;">Inicia sesión para acceder a tus finanzas.</p>
+<div id="authGate" class="nexo-auth-gate">
+  <div class="nexo-login">
+    <div class="nexo-brand">
+      <div class="nexo-brand-name">NEXO</div>
+      <div class="nexo-brand-sub">FINANZAS</div>
+      <p>Conecta tu dinero con tus metas</p>
     </div>
-    <label>Correo electrónico</label>
-    <input id="loginEmail" type="email" autocomplete="email" placeholder="tu@email.com">
-    <label style="margin-top:12px;">Contraseña</label>
-    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••">
-    <button class="btn" id="loginBtn" style="width:100%;margin-top:16px;">🔐 Iniciar sesión</button>
-    <div id="loginMsg" style="margin-top:12px;color:var(--muted);font-size:.85rem;text-align:center;"></div>
+    <div class="nexo-login-card">
+      <div class="nexo-login-heading"><h2>Inicia sesión</h2><p>Accede a tu cuenta para continuar</p></div>
+      <div class="nexo-field"><label for="loginEmail">Correo electrónico</label><input id="loginEmail" type="email" autocomplete="username" inputmode="email" placeholder="tu@email.com"></div>
+      <div class="nexo-field"><label for="loginPassword">Contraseña</label><div class="nexo-password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••"><button type="button" id="togglePassword" class="nexo-eye" aria-label="Mostrar contraseña">◉</button></div></div>
+      <label class="nexo-remember" for="rememberSession"><input id="rememberSession" type="checkbox" checked><span class="nexo-check"></span><span class="nexo-remember-copy"><strong>Mantener la sesión iniciada</strong><small>Entrar automáticamente en este dispositivo</small></span></label>
+      <button class="btn nexo-login-btn" id="loginBtn" type="button">Iniciar sesión</button>
+      <div class="nexo-divider"><span>o</span></div>
+      <button class="nexo-face-btn" id="passkeyBtn" type="button" aria-label="Iniciar sesión con Face ID"><span class="nexo-face-icon" aria-hidden="true">⌁</span></button>
+      <div id="loginMsg" class="nexo-login-msg" role="status" aria-live="polite"></div>
+    </div>
   </div>
 </div>
 
 <header>
-  <h1>💰 Mi Asistente Financiero</h1>
+  <h1>NEXO FINANZAS</h1>
   <p id="headerSub">Presupuesto, gastos e ingresos en un solo lugar</p>
   <button id="logoutBtn" class="btn secondary" style="margin-top:10px;padding:6px 12px;font-size:.78rem;display:none;">Cerrar sesión</button>
 </header>
@@ -323,7 +340,14 @@ const SEED_TX = [{"fecha": "2026-08-17", "descripcion": "Vidrio templado iPhone"
 const STORE_KEY = 'jf_data_v2';
 const SUPABASE_URL = 'https://femwcgsptumpmwjqnhxp.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_781kJpE3AFS1aBz6VYLDFg_HxHS38d_';
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const REMEMBER_KEY='nexo_remember_session';
+const rememberSession=()=>localStorage.getItem(REMEMBER_KEY)!=='false';
+const authStorage={
+  getItem(key){return (rememberSession()?localStorage:sessionStorage).getItem(key);},
+  setItem(key,value){const target=rememberSession()?localStorage:sessionStorage;const other=rememberSession()?sessionStorage:localStorage;target.setItem(key,value);other.removeItem(key);},
+  removeItem(key){localStorage.removeItem(key);sessionStorage.removeItem(key);}
+};
+const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:authStorage,experimental:{passkey:true}}});
 let currentUser = null;
 let cloudActive = false;
 const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -2310,27 +2334,14 @@ function renderBackup(app){
 }
 
 /* ================= AUTH / INIT ================= */
-function showLoginMessage(msg, error=false){
-  const el=document.getElementById('loginMsg'); el.textContent=msg||''; el.style.color=error?'var(--red)':'var(--muted)';
-}
-async function handleLogin(){
-  const email=document.getElementById('loginEmail').value.trim();
-  const password=document.getElementById('loginPassword').value;
-  const btn=document.getElementById('loginBtn');
-  if(!email||!password){showLoginMessage('Ingresa correo y contraseña.',true);return;}
-  btn.disabled=true; btn.textContent='Ingresando…'; showLoginMessage('');
-  const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});
-  if(error){showLoginMessage('No se pudo iniciar sesión. Revisa tus datos.',true);btn.disabled=false;btn.textContent='🔐 Iniciar sesión';return;}
-  currentUser=data.user;
-  console.log('Supabase sesión activa:', currentUser.id);
-  document.getElementById('authGate').style.display='none';
-  document.getElementById('logoutBtn').style.display='inline-block';
-  await initApp();
-  btn.disabled=false;
-  btn.textContent='🔐 Iniciar sesión';
-}
-
+function showLoginMessage(msg,error=false){const el=document.getElementById('loginMsg');el.textContent=msg||'';el.style.color=error?'var(--red)':'#7180a0';}
+function setRememberPreference(remember){localStorage.setItem(REMEMBER_KEY,remember?'true':'false');const key='sb-'+SUPABASE_URL.split('//')[1].split('.')[0]+'-auth-token';const from=remember?sessionStorage:localStorage;const to=remember?localStorage:sessionStorage;const value=from.getItem(key);if(value){to.setItem(key,value);from.removeItem(key);}}
+async function handleLogin(){const email=document.getElementById('loginEmail').value.trim();const password=document.getElementById('loginPassword').value;const btn=document.getElementById('loginBtn');if(!email||!password){showLoginMessage('Ingresa correo y contraseña.',true);return;}setRememberPreference(document.getElementById('rememberSession').checked);btn.disabled=true;btn.textContent='Ingresando…';showLoginMessage('');const {data,error}=await supabaseClient.auth.signInWithPassword({email,password});if(error){showLoginMessage('No se pudo iniciar sesión. Revisa tus datos.',true);btn.disabled=false;btn.textContent='Iniciar sesión';return;}currentUser=data.user;document.getElementById('authGate').style.display='none';document.getElementById('logoutBtn').style.display='inline-block';await initApp();btn.disabled=false;btn.textContent='Iniciar sesión';}
+async function handlePasskey(){const btn=document.getElementById('passkeyBtn');if(!window.PublicKeyCredential||!supabaseClient.auth.signInWithPasskey){showLoginMessage('Face ID todavía no está disponible en este dispositivo.',true);return;}btn.disabled=true;showLoginMessage('');try{const {data,error}=await supabaseClient.auth.signInWithPasskey();if(error)throw error;currentUser=data.user;document.getElementById('authGate').style.display='none';document.getElementById('logoutBtn').style.display='inline-block';await initApp();}catch(err){console.warn('Passkey:',err);showLoginMessage(err?.code==='passkey_disabled'?'Activa Passkeys en Supabase para usar Face ID.':'No se pudo iniciar con Face ID.',true);}finally{btn.disabled=false;}}
 document.getElementById('loginBtn').onclick=handleLogin;
+document.getElementById('passkeyBtn').onclick=handlePasskey;
+document.getElementById('rememberSession').addEventListener('change',e=>setRememberPreference(e.target.checked));
+document.getElementById('togglePassword').onclick=()=>{const i=document.getElementById('loginPassword');const show=i.type==='text';i.type=show?'password':'text';};
 document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')handleLogin();});
 document.getElementById('logoutBtn').onclick=async()=>{
   const btn=document.getElementById('logoutBtn');
@@ -2359,6 +2370,7 @@ document.getElementById('logoutBtn').onclick=async()=>{
 };
 
 (async()=>{
+  const remember=document.getElementById('rememberSession');if(remember)remember.checked=rememberSession();
   const {data}=await supabaseClient.auth.getSession();
   if(data.session){
     currentUser=data.session.user;
