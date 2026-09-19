@@ -2576,8 +2576,9 @@ document.addEventListener('click', async (event) => {
     position:static;width:48px;height:48px;padding:0;border:0;border-radius:16px;
     background:transparent;color:#102b62;font-size:0;
     display:flex;align-items:center;justify-content:center;cursor:pointer;
-    box-shadow:none;opacity:1;transform:none;pointer-events:auto;
+    box-shadow:none;opacity:1;transform:none;pointer-events:none;
   }
+  #mobileRadialMenu.open .radial-item{pointer-events:auto;}
   #mobileRadialMenu .radial-item .ri{font-size:1.55rem;line-height:1;}
   #mobileRadialMenu .radial-logout{
     border-top:1px solid rgba(120,135,155,.25);border-radius:0;
