@@ -2278,6 +2278,89 @@ function renderBackup(app){
 }
 
 /* ================= AUTH / INIT ================= */
+/* NEXO_AUTH_DIAGNOSTICS_V1 */
+window.__nexoManualLogout=false;
+(function(){
+  const KEY='nexo_auth_diagnostics_v1';
+  const MAX=80;
+  function safeStorage(){
+    try{return localStorage;}catch(e){return null;}
+  }
+  function snapshot(){
+    const tokenKey='sb-'+SUPABASE_URL.split('//')[1].split('.')[0]+'-auth-token';
+    let localHas=false,sessionHas=false;
+    try{localHas=!!localStorage.getItem(tokenKey);}catch(e){}
+    try{sessionHas=!!sessionStorage.getItem(tokenKey);}catch(e){}
+    return {
+      remember: rememberSession(),
+      localToken: localHas,
+      sessionToken: sessionHas,
+      visibility: document.visibilityState,
+      online:navigator.onLine,
+      path:location.pathname
+    };
+  }
+  window.__nexoAuthLog=function(event,details){
+    const item={at:new Date().toISOString(),event,details:details||null,state:snapshot()};
+    try{
+      const st=safeStorage();
+      if(st){
+        const old=JSON.parse(st.getItem(KEY)||'[]');
+        old.push(item);
+        st.setItem(KEY,JSON.stringify(old.slice(-MAX)));
+      }
+    }catch(e){}
+    console.info('[NEXO AUTH]',event,item);
+    renderDebug();
+  };
+  window.__nexoAuthDiagnostics=function(){
+    try{return JSON.parse(localStorage.getItem(KEY)||'[]');}catch(e){return [];}
+  };
+  window.__nexoAuthDiagnosticsClear=function(){
+    try{localStorage.removeItem(KEY);}catch(e){}
+    renderDebug();
+  };
+  function renderDebug(){
+    const box=document.getElementById('nexoAuthDebug');
+    if(!box)return;
+    const rows=window.__nexoAuthDiagnostics().slice().reverse();
+    box.querySelector('pre').textContent=JSON.stringify(rows,null,2);
+  }
+  function initDebugPanel(){
+    if(new URLSearchParams(location.search).get('debug')!=='auth')return;
+    if(document.getElementById('nexoAuthDebug'))return;
+    const box=document.createElement('div');
+    box.id='nexoAuthDebug';
+    box.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;max-height:48vh;z-index:99999;background:rgba(10,20,35,.96);color:#dbeafe;border:1px solid rgba(147,197,253,.45);border-radius:14px;padding:10px;box-shadow:0 12px 35px rgba(0,0,0,.35);font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;';
+    box.innerHTML='<div style="display:flex;gap:6px;align-items:center;margin-bottom:7px"><b style="flex:1">NEXO AUTH DIAGNÓSTICO</b><button id="nexoAuthCopy" style="border:0;border-radius:8px;padding:6px 9px">Copiar</button><button id="nexoAuthClear" style="border:0;border-radius:8px;padding:6px 9px">Limpiar</button></div><pre style="margin:0;max-height:40vh;overflow:auto;white-space:pre-wrap"></pre>';
+    document.body.appendChild(box);
+    box.querySelector('#nexoAuthCopy').onclick=async()=>{
+      try{await navigator.clipboard.writeText(JSON.stringify(window.__nexoAuthDiagnostics(),null,2));showToast('Diagnóstico copiado');}
+      catch(e){showToast('No se pudo copiar el diagnóstico');}
+    };
+    box.querySelector('#nexoAuthClear').onclick=()=>window.__nexoAuthDiagnosticsClear();
+    renderDebug();
+  }
+  window.addEventListener('load',initDebugPanel);
+  if(document.readyState!=='loading')initDebugPanel();
+  document.addEventListener('visibilitychange',()=>window.__nexoAuthLog('VISIBILITY_CHANGE'));
+  window.addEventListener('pageshow',e=>window.__nexoAuthLog('PAGE_SHOW',{persisted:!!e.persisted}));
+  window.addEventListener('pagehide',e=>window.__nexoAuthLog('PAGE_HIDE',{persisted:!!e.persisted}));
+  window.addEventListener('online',()=>window.__nexoAuthLog('ONLINE'));
+  window.addEventListener('offline',()=>window.__nexoAuthLog('OFFLINE'));
+  window.addEventListener('unhandledrejection',e=>{
+    const r=e.reason;
+    if(r&&(/auth|session|token|refresh/i.test(String(r.message||r)))){
+      window.__nexoAuthLog('UNHANDLED_AUTH_REJECTION',{message:String(r.message||r),name:r.name||null,code:r.code||null});
+    }
+  });
+  window.addEventListener('error',e=>{
+    if(/auth|session|token|refresh/i.test(String(e.message||''))){
+      window.__nexoAuthLog('AUTH_WINDOW_ERROR',{message:e.message,filename:e.filename||null,line:e.lineno||null});
+    }
+  });
+})();
+
 function showLoginMessage(msg,error=false){const el=document.getElementById('loginMsg');el.textContent=msg||'';el.style.color=error?'var(--red)':'#7180a0';}
 function setRememberPreference(remember){localStorage.setItem(REMEMBER_KEY,remember?'true':'false');const key='sb-'+SUPABASE_URL.split('//')[1].split('.')[0]+'-auth-token';const from=remember?sessionStorage:localStorage;const to=remember?localStorage:sessionStorage;const value=from.getItem(key);if(value){to.setItem(key,value);from.removeItem(key);}}
 async function offerPasskeyRegistration(){if(!currentUser||!window.PublicKeyCredential||!supabaseClient.auth.registerPasskey)return;try{const {data:passkeys,error:listError}=await supabaseClient.auth.passkey.list();if(listError||passkeys?.length)return;const setup=confirm('¿Quieres activar Face ID para iniciar sesión más rápido la próxima vez?');if(!setup)return;showLoginMessage('Configurando Face ID…');const {error}=await supabaseClient.auth.registerPasskey();if(error)throw error;showLoginMessage('Face ID quedó configurado en este dispositivo.');showToast('🔐 Face ID configurado correctamente');}catch(err){console.warn('Passkey registration:',err);if(err?.code==='passkey_disabled')showToast('Activa Passkeys en Supabase para configurar Face ID.');}}
@@ -2289,6 +2372,8 @@ document.getElementById('rememberSession').addEventListener('change',e=>setRemem
 document.getElementById('togglePassword').onclick=()=>{const i=document.getElementById('loginPassword');const show=i.type==='text';i.type=show?'password':'text';};
 document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')handleLogin();});
 document.getElementById('logoutBtn').onclick=async()=>{
+  window.__nexoManualLogout=true;
+  window.__nexoAuthLog?.('MANUAL_LOGOUT_START');
   const btn=document.getElementById('logoutBtn');
   btn.disabled=true;
   btn.textContent='Saliendo…';
@@ -2316,17 +2401,32 @@ document.getElementById('logoutBtn').onclick=async()=>{
 
 (async()=>{
   const remember=document.getElementById('rememberSession');if(remember)remember.checked=rememberSession();
-  const {data}=await supabaseClient.auth.getSession();
+  const {data,error:sessionError}=await supabaseClient.auth.getSession();
+  window.__nexoAuthLog?.('GET_SESSION_RESULT',{
+    hasSession:!!data.session,
+    userId:data.session?.user?.id||null,
+    error:sessionError?{message:sessionError.message||null,code:sessionError.code||null}:null
+  });
   if(data.session){
     currentUser=data.session.user;
     document.getElementById('authGate').style.display='none';
     document.getElementById('logoutBtn').style.display='inline-block';
     await initApp();
   } else {
+    window.__nexoAuthLog?.('NO_INITIAL_SESSION');
     document.getElementById('authGate').style.display='flex';
   }
   supabaseClient.auth.onAuthStateChange((event,session)=>{
-    if(event==='SIGNED_OUT'){document.getElementById('authGate').style.display='flex';document.getElementById('logoutBtn').style.display='none';}
+    window.__nexoAuthLog?.(event,{
+      hasSession:!!session,
+      userId:session?.user?.id||null,
+      manualLogout:!!window.__nexoManualLogout,
+      expiresAt:session?.expires_at||null
+    });
+    if(event==='SIGNED_OUT'){
+      document.getElementById('authGate').style.display='flex';
+      document.getElementById('logoutBtn').style.display='none';
+    }
   });
 })();
 </script>
