@@ -2604,7 +2604,10 @@ document.addEventListener('click', async (event) => {
     transition:opacity .16s ease,transform .16s ease;
     pointer-events:none;
   }
-  #mobileRadialMenu.open .radial-panel{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
+  #mobileRadialMenu .radial-panel,
+  #mobileRadialMenu .radial-panel *{pointer-events:none;}
+  #mobileRadialMenu.open .radial-panel,
+  #mobileRadialMenu.open .radial-panel *{opacity:1;transform:translateY(0) scale(1);pointer-events:auto;}
   #mobileRadialMenu .radial-item{
     position:static;width:48px;height:48px;padding:0;border:0;border-radius:16px;
     background:transparent;color:#102b62;font-size:0;
@@ -2662,8 +2665,10 @@ document.addEventListener('click', async (event) => {
       const w=window.innerWidth,h=window.innerHeight;
       const size=50, margin=8;
       const maxX=w-size-margin,maxY=h-size-margin;
+
       edge=edge||menu.dataset.edge||'right';
       menu.dataset.edge=edge;
+
       if(edge==='left'){ cx=margin; cy=Math.max(margin,Math.min(y,maxY)); }
       else if(edge==='right'){ cx=maxX; cy=Math.max(margin,Math.min(y,maxY)); }
       else if(edge==='top'){ cx=Math.max(margin,Math.min(x,maxX)); cy=margin; }
@@ -2673,15 +2678,39 @@ document.addEventListener('click', async (event) => {
       center.style.top=cy+'px';
 
       const panelW=64, panelH=5*48+4*8+20+14;
-      let px=cx+size+8;
-      if(edge==='left') px=cx+size+8;
-      else if(px+panelW>w-6) px=cx-panelW-8;
-      let py=cy;
-      if(edge==='top') py=cy+size+8;
-      else if(py+panelH>h-8) py=Math.max(8,h-panelH-8);
-      if(py<8) py=8;
+      let px,py;
+
+      // Keep the menu attached to the same edge while ensuring it stays on-screen.
+      if(edge==='left'){
+        px=cx+size+8;
+        py=Math.max(8,Math.min(cy,h-panelH-8));
+      }else if(edge==='right'){
+        px=cx-panelW-8;
+        py=Math.max(8,Math.min(cy,h-panelH-8));
+      }else if(edge==='top'){
+        px=Math.max(8,Math.min(cx-panelW/2,w-panelW-8));
+        py=cy+size+8;
+      }else{
+        px=Math.max(8,Math.min(cx-panelW/2,w-panelW-8));
+        py=cy-panelH-8;
+      }
+
       panel.style.left=px+'px';
       panel.style.top=py+'px';
+    }
+
+    function nearestEdge(x,y){
+      const w=window.innerWidth,h=window.innerHeight;
+      const size=50,margin=8;
+      const maxX=w-size-margin,maxY=h-size-margin;
+      const distances=[
+        {edge:'left',d:Math.abs(x-margin)},
+        {edge:'right',d:Math.abs(x-maxX)},
+        {edge:'top',d:Math.abs(y-margin)},
+        {edge:'bottom',d:Math.abs(y-maxY)}
+      ];
+      distances.sort((a,b)=>a.d-b.d);
+      return distances[0].edge;
     }
 
     setPosition(window.innerWidth-58, Math.round(window.innerHeight/2)-25, 'right');
@@ -2702,9 +2731,13 @@ document.addEventListener('click', async (event) => {
       if(!dragging)return;
       const dx=e.clientX-sx,dy=e.clientY-sy;
       if(Math.abs(dx)>5||Math.abs(dy)>5)moved=true;
-      const edge=menu.dataset.edge||'right';
-      if(edge==='left'||edge==='right') setPosition(startX,startY+dy,edge);
-      else setPosition(startX+dx,startY,edge);
+
+      // The button can travel only along the screen perimeter.
+      // If the drag crosses toward another side, snap to the nearest edge.
+      const proposedX=startX+dx;
+      const proposedY=startY+dy;
+      const edge=nearestEdge(proposedX,proposedY);
+      setPosition(proposedX,proposedY,edge);
     });
     center.addEventListener('pointerup',e=>{
       if(!dragging)return;
@@ -2712,6 +2745,10 @@ document.addEventListener('click', async (event) => {
       if(!moved) {
         menu.classList.toggle('open');
         menu.setAttribute('aria-expanded',menu.classList.contains('open')?'true':'false');
+      } else {
+        // Final snap to the nearest perimeter edge.
+        const edge=menu.dataset.edge||'right';
+        setPosition(cx,cy,edge);
       }
       e.preventDefault();
     });
