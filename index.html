@@ -2624,27 +2624,38 @@ document.addEventListener('click', async (event) => {
     const panel=menu.querySelector('.radial-panel');
     let dragging=false, moved=false, sx=0, sy=0, startX=0, startY=0, cx=0, cy=0;
 
-    function setPosition(x,y){
+    function setPosition(x,y,edge){
       const w=window.innerWidth,h=window.innerHeight;
       const size=50, margin=8;
-      cx=Math.max(margin,Math.min(x,w-size-margin));
-      cy=Math.max(margin,Math.min(y,h-size-margin));
+      const maxX=w-size-margin,maxY=h-size-margin;
+      edge=edge||menu.dataset.edge||'right';
+      menu.dataset.edge=edge;
+      if(edge==='left'){ cx=margin; cy=Math.max(margin,Math.min(y,maxY)); }
+      else if(edge==='right'){ cx=maxX; cy=Math.max(margin,Math.min(y,maxY)); }
+      else if(edge==='top'){ cx=Math.max(margin,Math.min(x,maxX)); cy=margin; }
+      else { cx=Math.max(margin,Math.min(x,maxX)); cy=maxY; }
+
       center.style.left=cx+'px';
       center.style.top=cy+'px';
 
       const panelW=64, panelH=5*48+4*8+20+14;
       let px=cx+size+8;
-      if(px+panelW>w-6) px=cx-panelW-8;
+      if(edge==='left') px=cx+size+8;
+      else if(px+panelW>w-6) px=cx-panelW-8;
       let py=cy;
-      if(py+panelH>h-8) py=Math.max(8,h-panelH-8);
+      if(edge==='top') py=cy+size+8;
+      else if(py+panelH>h-8) py=Math.max(8,h-panelH-8);
       if(py<8) py=8;
       panel.style.left=px+'px';
       panel.style.top=py+'px';
     }
 
-    setPosition(window.innerWidth-66, Math.round(window.innerHeight/2)-25);
+    setPosition(window.innerWidth-58, Math.round(window.innerHeight/2)-25, 'right');
 
-    const close=()=>menu.classList.remove('open');
+    const close=()=>{
+      menu.classList.remove('open');
+      menu.setAttribute('aria-expanded','false');
+    };
 
     center.addEventListener('pointerdown',e=>{
       dragging=true;moved=false;
@@ -2657,12 +2668,17 @@ document.addEventListener('click', async (event) => {
       if(!dragging)return;
       const dx=e.clientX-sx,dy=e.clientY-sy;
       if(Math.abs(dx)>5||Math.abs(dy)>5)moved=true;
-      setPosition(startX+dx,startY+dy);
+      const edge=menu.dataset.edge||'right';
+      if(edge==='left'||edge==='right') setPosition(startX,startY+dy,edge);
+      else setPosition(startX+dx,startY,edge);
     });
     center.addEventListener('pointerup',e=>{
       if(!dragging)return;
       dragging=false;center.classList.remove('dragging');
-      if(!moved)menu.classList.toggle('open');
+      if(!moved) {
+        menu.classList.toggle('open');
+        menu.setAttribute('aria-expanded',menu.classList.contains('open')?'true':'false');
+      }
       e.preventDefault();
     });
     center.addEventListener('pointercancel',()=>{dragging=false;center.classList.remove('dragging');});
@@ -2700,7 +2716,7 @@ document.addEventListener('click', async (event) => {
       if(menu.classList.contains('open')&&!menu.contains(e.target))close();
     },true);
 
-    window.addEventListener('resize',()=>setPosition(cx,cy));
+    window.addEventListener('resize',()=>setPosition(cx,cy,menu.dataset.edge||'right'));
     window.__goBudgetCategories=()=>{if(categories)categories.click();};
   }
 
