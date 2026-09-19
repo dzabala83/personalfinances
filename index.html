@@ -819,7 +819,7 @@ function renderNav(){
   brand.innerHTML='<div class="brand-main">NEXO</div><div class="brand-sub">FINANZAS</div>'; nav.appendChild(brand);
   const group=document.createElement('div'); group.className='nexo-nav-group';
   const icons={dashboard:'⌂',transacciones:'▤',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
-  ['dashboard','transacciones','categorias','subir','pendientes','backup'].forEach(id=>{
+  ['dashboard','transacciones','categorias','subir','pendientes'].forEach(id=>{
     const tab=TABS.find(x=>x.id===id); if(!tab)return;
     const btn=document.createElement('button'); btn.className=tab.id===currentTab?'active':'';
     const label=tab.label.replace(/^\S+\s*/,'');
@@ -828,6 +828,11 @@ function renderNav(){
     btn.onclick=()=>{currentTab=id;render()}; group.appendChild(btn);
   });
   nav.appendChild(group);
+  const reports=document.createElement('button');reports.className='nexo-secondary';reports.innerHTML='<span class="nav-icon">▥</span><span class="nav-label">Reportes</span>';reports.onclick=()=>{currentTab='dashboard';render();showToast('Reportes detallados estarán disponibles próximamente.');};nav.appendChild(reports);
+  const backupTab=TABS.find(x=>x.id==='backup');
+  if(backupTab){
+    const btn=document.createElement('button');btn.className=backupTab.id===currentTab?'active':'';btn.innerHTML='<span class="nav-icon">▣</span><span class="nav-label">Backup</span>';btn.onclick=()=>{currentTab='backup';render();};nav.appendChild(btn);
+  }
   const spacer=document.createElement('div');spacer.className='nexo-sidebar-spacer';nav.appendChild(spacer);
   const divider=document.createElement('div');divider.className='nexo-sidebar-divider';nav.appendChild(divider);
   const config=document.createElement('button');config.className='nexo-secondary';config.innerHTML='<span class="nav-icon">⚙</span><span class="nav-label">Configuración</span>';config.onclick=()=>showToast('Configuración estará disponible próximamente.');nav.appendChild(config);
