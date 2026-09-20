@@ -3316,5 +3316,21 @@ document.addEventListener('click', async (event) => {
   setTimeout(()=>translateDom(localStorage.getItem('nexo-language')==='en'),300);
 })();
 </script>
+<script>
+/* FULL_WEB_ENGLISH_TRANSLATION_V10_MONTHS */
+(function(){
+  const months={Enero:'January',Febrero:'February',Marzo:'March',Abril:'April',Mayo:'May',Junio:'June',Julio:'July',Agosto:'August',Septiembre:'September',Octubre:'October',Noviembre:'November',Diciembre:'December'};
+  const rev=Object.fromEntries(Object.entries(months).map(([a,b])=>[b,a]));
+  const old=window.__nexoTranslateAll;
+  if(!old)return;
+  window.__nexoTranslateAll=function(toEnglish){
+    old(toEnglish);
+    const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+    const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+    const map=toEnglish?months:rev;
+    nodes.forEach(n=>{const p=n.parentElement;if(!p||['SCRIPT','STYLE'].includes(p.tagName))return;let s=n.nodeValue;for(const [a,b] of Object.entries(map))s=s.replace(new RegExp('\\b'+a+'\\b','g'),b);n.nodeValue=s;});
+  };
+})();
+</script>
 </body>
 </html>
