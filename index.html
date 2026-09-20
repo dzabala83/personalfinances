@@ -527,6 +527,18 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
   }
 }
 </style>
+<style id="radial-menu-geometry-v5">
+/* RADIAL_MENU_GEOMETRY_V5 */
+@media(max-width:600px){
+  #mobileRadialMenu .radial-center{
+    width:75px!important;height:75px!important;font-size:1.875rem!important;
+  }
+  .mobile-bottom-nav .mb-plus{
+    width:66px!important;height:66px!important;min-width:66px!important;min-height:66px!important;
+    font-size:2.1rem!important;margin-top:-24px!important;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -2868,7 +2880,7 @@ document.addEventListener('click', async (event) => {
 
     function setPosition(x,y,edge){
       const w=window.innerWidth,h=window.innerHeight;
-      const size=50, margin=8;
+      const size=75, margin=8;
       const maxX=w-size-margin,maxY=h-size-margin;
 
       edge=edge||menu.dataset.edge||'right';
@@ -2906,7 +2918,7 @@ document.addEventListener('click', async (event) => {
 
     function nearestEdge(x,y){
       const w=window.innerWidth,h=window.innerHeight;
-      const size=50,margin=8;
+      const size=75,margin=8;
       const maxX=w-size-margin,maxY=h-size-margin;
       const distances=[
         {edge:'left',d:Math.abs(x-margin)},
@@ -2918,7 +2930,7 @@ document.addEventListener('click', async (event) => {
       return distances[0].edge;
     }
 
-    setPosition(window.innerWidth-58, Math.round(window.innerHeight/2)-25, 'right');
+    setPosition(window.innerWidth-83, Math.round(window.innerHeight/2)-37.5, 'right');
 
     const close=()=>{
       menu.classList.remove('open');
