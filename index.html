@@ -598,6 +598,20 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
   }
 }
 </style>
+<style id="currency-language-settings-v8">
+/* CURRENCY_LANGUAGE_SETTINGS_V8 */
+.nexo-tc-field input{width:100%;height:40px;border:0;outline:0;background:transparent;color:#082b91;font-size:.92rem;}
+:root[data-theme="dark"] .nexo-tc-field input{color:#e8eef9!important;}
+@media(max-width:600px){
+  .nexo-form-grid{grid-template-columns:1fr!important;}
+}
+</style>
+<script>
+(function(){
+  const originalRenderConfiguracion=window.renderConfiguracion;
+  window.__nexoSettingsV8=true;
+})();
+</script>
 </head>
 <body>
 
@@ -1131,7 +1145,10 @@ function renderConfiguracion(app){
         <button class="nexo-theme active" data-theme="light"><span class="nexo-theme-icon">☀️</span><span><strong>Claro</strong></span><span class="nexo-radio"></span></button><button class="nexo-theme" data-theme="dark"><span class="nexo-theme-icon">🌙</span><span><strong>Oscuro</strong></span><span class="nexo-radio"></span></button><button class="nexo-theme" data-theme="system"><span class="nexo-theme-icon">🖥️</span><span><strong>Sistema</strong><small>Usar la configuración de tu dispositivo</small></span><span class="nexo-radio"></span></button>
       </div></section>
       <section class="nexo-config-card"><div class="nexo-config-card-head"><div class="nexo-config-card-icon">🌐</div><div><h3>Idioma y moneda</h3><p>Configura tu idioma, moneda y formato de fecha.</p></div></div><div class="nexo-form-grid">
-        <div class="nexo-fieldbox"><label>Idioma</label><select><option>Español</option></select></div><div class="nexo-fieldbox"><label>Moneda</label><select><option>Boliviano (Bs)</option></select></div><div class="nexo-fieldbox"><label>Formato de fecha</label><select><option>dd/mm/aaaa</option></select></div><div class="nexo-fieldbox"><label>Separador de miles</label><select><option>1,000.00</option></select></div>
+        <div class="nexo-fieldbox"><label>Idioma</label><select id="nexoLanguage"><option value="es">Español</option><option value="en">English</option></select></div>
+        <div class="nexo-fieldbox nexo-currency-field"><label>Moneda</label><select id="nexoCurrency"><option value="BOB">Boliviano (Bs)</option><option value="USD">Dólar (USD)</option></select></div>
+        <div class="nexo-fieldbox nexo-tc-field" id="nexoTcField"><label>TC dólar (Bs por USD)</label><input id="nexoDollarTc" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej. 6.97"></div>
+        <div class="nexo-fieldbox"><label>Formato de fecha</label><select><option>dd/mm/aaaa</option></select></div><div class="nexo-fieldbox"><label>Separador de miles</label><select><option>1,000.00</option></select></div>
       </div></section>
       <section class="nexo-config-card"><div class="nexo-config-card-head"><div class="nexo-config-card-icon">▣</div><div><h3>Periodo de presupuesto</h3><p>Define el inicio del mes para tus presupuestos.</p></div></div><div class="nexo-budget-row"><div class="nexo-fieldbox"><label>Inicio del mes</label><select><option>Día 1</option></select></div><div class="nexo-info"><b>i</b><span>Esta configuración se aplicará a tus presupuestos y reportes mensuales.</span></div></div></section>
       <section class="nexo-config-card"><div class="nexo-config-card-head"><div class="nexo-config-card-icon">▤</div><div><h3>Datos y almacenamiento</h3><p>Gestiona el almacenamiento y limpieza de datos.</p></div></div><div class="nexo-data-actions"><button class="nexo-data-btn" type="button">⇩ &nbsp; Exportar datos</button><button class="nexo-data-btn import" type="button">⇧ &nbsp; Importar datos</button></div></section>
@@ -1143,6 +1160,32 @@ function renderConfiguracion(app){
     </div></div>`;
   wrap.querySelectorAll('.nexo-switch').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('on')));
   wrap.querySelectorAll('.nexo-theme').forEach(b=>b.addEventListener('click',()=>{wrap.querySelectorAll('.nexo-theme').forEach(x=>x.classList.remove('active'));b.classList.add('active');}));
+  const langSelect=wrap.querySelector('#nexoLanguage');
+  const currencySelect=wrap.querySelector('#nexoCurrency');
+  const tcField=wrap.querySelector('#nexoTcField');
+  const tcInput=wrap.querySelector('#nexoDollarTc');
+  const savedLang=localStorage.getItem('nexo-language')||'es';
+  const savedCurrency=localStorage.getItem('nexo-currency')||'BOB';
+  const savedTc=localStorage.getItem('nexo-dollar-tc')||'6.97';
+  langSelect.value=savedLang;
+  currencySelect.value=savedCurrency;
+  tcInput.value=savedTc;
+  function syncCurrency(){
+    tcField.style.display=currencySelect.value==='USD'?'block':'none';
+  }
+  syncCurrency();
+  langSelect.addEventListener('change',()=>{
+    localStorage.setItem('nexo-language',langSelect.value);
+    showToast(langSelect.value==='en'?'English selected.':'Idioma español seleccionado.');
+  });
+  currencySelect.addEventListener('change',()=>{
+    localStorage.setItem('nexo-currency',currencySelect.value);
+    syncCurrency();
+    showToast(currencySelect.value==='USD'?'Moneda USD seleccionada.':'Moneda Bs seleccionada.');
+  });
+  tcInput.addEventListener('input',()=>{
+    localStorage.setItem('nexo-dollar-tc',tcInput.value);
+  });
   wrap.querySelectorAll('.nexo-config-tab').forEach(b=>b.addEventListener('click',()=>{wrap.querySelectorAll('.nexo-config-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');showToast('Esta sección estará disponible próximamente.');}));
   app.appendChild(wrap);
 }
