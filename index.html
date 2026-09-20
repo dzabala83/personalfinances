@@ -2845,5 +2845,38 @@ document.addEventListener('click', async (event) => {
   new MutationObserver(bind).observe(document.body,{childList:true,subtree:true});
 })();
 </script>
+
+<style id="mobile-profile-toggle-style">
+@media(max-width:600px){
+  .nexo-avatar{
+    cursor:pointer;
+    -webkit-tap-highlight-color:transparent;
+    transition:transform .15s ease,box-shadow .15s ease;
+  }
+  .nexo-avatar:active{
+    transform:scale(.94);
+  }
+}
+</style>
+<script>
+/* MOBILE_PROFILE_TOGGLE_V1 */
+(function(){
+  if(window.__mobileProfileToggleV1)return;
+  window.__mobileProfileToggleV1=true;
+
+  document.addEventListener('click',function(event){
+    const avatar=event.target.closest('.nexo-avatar');
+    if(!avatar || window.innerWidth>600)return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    currentTab = currentTab === 'config' ? 'dashboard' : 'config';
+    render();
+    window.scrollTo({top:0,behavior:'smooth'});
+  },true);
+})();
+</script>
+
 </body>
 </html>
