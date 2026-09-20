@@ -617,6 +617,7 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
 .nexo-currency-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;grid-column:1/-1;}
 @media(max-width:600px){.nexo-currency-row{grid-template-columns:1fr 1fr;gap:10px;}}
 </style>
+<style id="smart-categorization-style-v11">.smart-suggestion{font-size:.78rem;color:var(--text);}</style>
 </head>
 <body>
 
@@ -1706,12 +1707,15 @@ function renderPendientes(app){
     const info=document.createElement('div');info.className='card';info.innerHTML=`<b>${pend.length}</b> transacción(es) esperando una categoría. Asígnalas para que el sistema aprenda y las reconozca automáticamente la próxima vez.`;listWrap.appendChild(info);
     pend.forEach(t=>{
       const gastoCats=state.categories.filter(c=>c.tipo==='Gasto'),incCats=state.categories.filter(c=>c.tipo==='Ingreso');
-      const div=document.createElement('div');div.className='pending-item';div.innerHTML=`<div class="desc">${escapeHtml(t.descripcion)}</div><div class="meta">${escapeHtml(t.fecha||'')} · ${escapeHtml(t.cuenta||'')} · <b>${fmtMoney(t.monto)}</b> · <span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo)}</span></div><div class="inline-form"><div><select class="pTipo"><option value="Gasto" ${t.tipo==='Gasto'?'selected':''}>Gasto</option><option value="Ingreso" ${t.tipo==='Ingreso'?'selected':''}>Ingreso</option></select></div><div><select class="pCat"></select></div><div><select class="pSub"></select></div></div><div class="inline-form" style="margin-top:8px;"><div><input type="text" class="pNewCat" placeholder="O escribe categoría nueva"></div><div><button class="btn" style="width:100%" data-assign="${t.id}">Asignar</button></div></div>`;listWrap.appendChild(div);
+      const div=document.createElement('div');div.className='pending-item';div.innerHTML=`<div class="desc">${escapeHtml(t.descripcion)}</div><div class="meta">${escapeHtml(t.fecha||'')} · ${escapeHtml(t.cuenta||'')} · <b>${fmtMoney(t.monto)}</b> · <span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo)}</span></div><div class="inline-form"><div><select class="pTipo"><option value="Gasto" ${t.tipo==='Gasto'?'selected':''}>Gasto</option><option value="Ingreso" ${t.tipo==='Ingreso'?'selected':''}>Ingreso</option></select></div><div><select class="pCat"></select></div><div><select class="pSub"></select></div></div><div class="smart-suggestion" style="margin:8px 0;padding:8px 10px;border-radius:9px;background:var(--accent-soft);border:1px solid var(--border);">${t.suggestedCategoria?`💡 <b>Sugerencia:</b> ${escapeHtml(t.suggestedCategoria)}${t.suggestedSubcategoria?` / ${escapeHtml(t.suggestedSubcategoria)}`:""} · <b>${Number(t.confidence||0)}%</b>`:"🔎 Sin sugerencia con suficiente confianza"}</div><div class="inline-form" style="margin-top:8px;"><div><input type="text" class="pNewCat" placeholder="O escribe categoría nueva"></div><div><button class="btn" style="width:100%" data-assign="${t.id}">Asignar</button></div></div><label style="display:flex;align-items:center;gap:7px;margin-top:9px;font-size:.78rem;color:var(--muted);"><input type="checkbox" class="pLearn" checked> Aprender esta decisión para futuras transacciones similares</label>`;listWrap.appendChild(div);
       const tipoSel=div.querySelector('.pTipo'),catSel=div.querySelector('.pCat'),subSel=div.querySelector('.pSub');
       function refreshCats(){const cats=tipoSel.value==='Gasto'?gastoCats:incCats;catSel.innerHTML='<option value="">(elegir)</option>'+cats.map(c=>`<option value="${escapeHtml(c.nombre)}" ${c.nombre===t.categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('');refreshSubs();}
       function refreshSubs(){const cat=getCategory(tipoSel.value,catSel.value),subs=cat?cat.subcategorias:[];subSel.innerHTML='<option value="">(ninguna)</option>'+subs.map(s=>`<option value="${escapeHtml(s)}" ${s===t.subcategoria?'selected':''}>${escapeHtml(s)}</option>`).join('');}
       tipoSel.onchange=refreshCats;catSel.onchange=refreshSubs;refreshCats();
-      div.querySelector('[data-assign]').onclick=()=>{const newCatName=div.querySelector('.pNewCat').value.trim(),tipo=tipoSel.value;let catName=catSel.value;if(newCatName){catName=newCatName;if(!getCategory(tipo,catName))state.categories.push({id:uid('cat'),tipo,nombre:catName,subcategorias:[],presupuesto:0,subPresupuestos:{}});}if(!catName){showToast('Elige o crea una categoría');return;}const sub=subSel.value||null;t.tipo=tipo;t.categoria=catName;t.subcategoria=sub;t.estado='categorizado';const words=normalize(t.descripcion).match(/[a-z]{4,}/g)||[];words.slice(0,3).forEach(w=>{if(!state.rules.find(r=>r.keyword===w))state.rules.push({id:uid('rule'),keyword:w,tipo,categoria:catName,subcategoria:sub});});saveState();showToast('Transacción categorizada');render();};
+      div.querySelector('[data-assign]').onclick=()=>{const newCatName=div.querySelector('.pNewCat').value.trim(),tipo=tipoSel.value;let catName=catSel.value;if(newCatName){catName=newCatName;if(!getCategory(tipo,catName))state.categories.push({id:uid('cat'),tipo,nombre:catName,subcategorias:[],presupuesto:0,subPresupuestos:{}});}if(!catName){showToast('Elige o crea una categoría');return;}const sub=subSel.value||null;t.tipo=tipo;t.categoria=catName;t.subcategoria=sub;t.estado='categorizado';
+      t.confidence=100;t.suggestedCategoria=null;t.suggestedSubcategoria=null;t.suggestionSource='manual';
+      if(div.querySelector('.pLearn')?.checked && window.learnCategorization) window.learnCategorization(t,true);
+      saveState();showToast('Transacción categorizada y aprendizaje guardado');render();};
     });
   }
   ['pTipo','pCuenta','pDesde','pHasta'].forEach(id=>controls.querySelector('#'+id).onchange=renderList);
@@ -2369,17 +2373,7 @@ function parseDate(v){
   return s;
 }
 
-function matchRules(text){
-  const norm = normalize(text);
-  let best = null;
-  let bestLen = 0;
-  state.rules.forEach(r=>{
-    if(norm.includes(r.keyword) && r.keyword.length>bestLen){
-      best = r; bestLen = r.keyword.length;
-    }
-  });
-  return best;
-}
+function matchRules(text,tipo){ return window.smartCategorize ? window.smartCategorize(text,tipo) : null; }
 
 function processBankRows(rows){
   const headerIdx = findHeaderRow(rows);
@@ -2396,7 +2390,7 @@ function processBankRows(rows){
   const iCodigo = colIndex(header,'codigo de transaccion','codigo');
   const iAdicional = colIndex(header,'adicionales','adicional');
 
-  let imported=0, autoCat=0, pendientes=0, duplicadas=0;
+  let imported=0, autoCat=0, pendientes=0, sugeridas=0, duplicadas=0;
   const existingRefs = new Set(state.transactions.map(t=>t.refId).filter(Boolean));
 
   for(let i=headerIdx+1;i<rows.length;i++){
@@ -2419,7 +2413,9 @@ function processBankRows(rows){
     if(refId && existingRefs.has(refId)){ duplicadas++; continue; }
     if(refId) existingRefs.add(refId);
 
-    const rule = matchRules(fullText);
+    const smart = matchRules(fullText,tipo);
+    const autoThreshold = 85;
+    const rule = smart && smart.confidence >= autoThreshold ? smart : null;
     const tx = {
       id: uid('tx'),
       fecha, descripcion: fullText || descBase || '(sin descripción)',
@@ -2429,11 +2425,15 @@ function processBankRows(rows){
       cuenta: 'BNB',
       origen: 'extracto',
       estado: rule ? 'categorizado' : 'pendiente',
+      confidence: smart?.confidence||0,
+      suggestedCategoria: smart?.categoria||null,
+      suggestedSubcategoria: smart?.subcategoria||null,
+      suggestionSource: smart?.source||null,
       refId
     };
     state.transactions.push(tx);
     imported++;
-    if(rule) autoCat++; else pendientes++;
+    if(rule) autoCat++; else { pendientes++; if(smart) sugeridas++; }
   }
 
   saveState();
@@ -3329,6 +3329,26 @@ document.addEventListener('click', async (event) => {
     const nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
     const map=toEnglish?months:rev;
     nodes.forEach(n=>{const p=n.parentElement;if(!p||['SCRIPT','STYLE'].includes(p.tagName))return;let s=n.nodeValue;for(const [a,b] of Object.entries(map))s=s.replace(new RegExp('\\b'+a+'\\b','g'),b);n.nodeValue=s;});
+  };
+})();
+</script>
+<script id="smart-categorization-bc-v11">/* SMART_CATEGORIZATION_BC_V11 */
+(function(){
+  function tokens(s){ return (normalize(s).match(/[a-z0-9]{3,}/g)||[]).filter(x=>!['por','para','del','las','los','una','con','cta','debito','credito'].includes(x)); }
+  function similarity(a,b){ const A=new Set(tokens(a)),B=new Set(tokens(b)); if(!A.size||!B.size)return 0; let hit=0; A.forEach(x=>{if(B.has(x))hit++;}); return hit/Math.max(A.size,B.size); }
+  window.smartCategorize=function(text,tipo){
+    const candidates=[],norm=normalize(text);
+    (state.rules||[]).forEach(r=>{ if(r.tipo!==tipo)return; const k=normalize(r.keyword||''); if(k&&norm.includes(k)){ const specificity=Math.min(k.length/18,1); candidates.push({categoria:r.categoria,subcategoria:r.subcategoria||null,score:Math.round(82+specificity*18),source:'rule'}); }});
+    (state.transactions||[]).forEach(t=>{ if(t.tipo!==tipo||t.estado==='pendiente'||!t.categoria)return; const sim=similarity(text,t.descripcion||''); if(sim>=0.5)candidates.push({categoria:t.categoria,subcategoria:t.subcategoria||null,score:Math.round(sim*88),source:'history'}); });
+    candidates.sort((a,b)=>b.score-a.score);
+    if(!candidates.length)return null;
+    const best=candidates[0];
+    return {categoria:best.categoria,subcategoria:best.subcategoria||null,confidence:Math.min(99,best.score),source:best.source,alternatives:candidates.slice(1,4)};
+  };
+  window.learnCategorization=function(tx,createRule){
+    if(!createRule||!tx||!tx.categoria)return;
+    const words=tokens(tx.descripcion||'').filter(w=>w.length>=4).filter(w=>!['debito','credito','referencia','cuenta','transferencia'].includes(w));
+    words.slice(0,5).forEach(w=>{ if(!(state.rules||[]).find(r=>normalize(r.keyword)===w&&r.tipo===tx.tipo)) state.rules.push({id:uid('rule'),keyword:w,tipo:tx.tipo,categoria:tx.categoria,subcategoria:tx.subcategoria||null}); });
   };
 })();
 </script>
