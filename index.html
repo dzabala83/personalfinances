@@ -1183,6 +1183,7 @@ function renderConfiguracion(app){
   syncCurrency();
   langSelect.addEventListener('change',()=>{
     localStorage.setItem('nexo-language',langSelect.value);
+    if(window.__nexoTranslateAll) window.__nexoTranslateAll(langSelect.value==='en');
     showToast(langSelect.value==='en'?'English selected.':'Idioma español seleccionado.');
   });
   currencySelect.addEventListener('change',()=>{
@@ -3205,5 +3206,115 @@ document.addEventListener('click', async (event) => {
 })();
 </script>
 
+<script id="full-web-translation-v10">
+/* FULL_WEB_ENGLISH_TRANSLATION_V10 */
+(function(){
+  const ES_EN={
+    "NEXO FINANZAS":"NEXO FINANCE","Conecta tu dinero con tus metas":"Connect your money to your goals",
+    "Inicia sesión":"Sign in","Accede a tu cuenta para continuar":"Access your account to continue",
+    "Correo electrónico":"Email","Contraseña":"Password","Mantener la sesión iniciada":"Keep me signed in",
+    "Entrar automáticamente en este dispositivo":"Sign in automatically on this device","Iniciar sesión":"Sign in",
+    "Hola, José Daniel 👋":"Hi, José Daniel 👋","Aquí tienes el resumen de tus finanzas.":"Here is your financial summary.",
+    "Cerrar sesión":"Sign out","Resumen":"Summary","Transacciones":"Transactions","Reportes":"Reports","Backup":"Backup","Configuración":"Settings",
+    "Personaliza tu experiencia en NEXO FINANZAS.":"Customize your NEXO FINANCE experience.","General":"General","Cuentas":"Accounts",
+    "Categorías":"Categories","Notificaciones":"Notifications","Preferencias":"Preferences","Seguridad":"Security",
+    "Apariencia":"Appearance","Elige el estilo de la aplicación.":"Choose the app appearance.","Claro":"Light","Oscuro":"Dark","Sistema":"System",
+    "Usar la configuración de tu dispositivo":"Use your device settings","Idioma y moneda":"Language & currency",
+    "Configura tu idioma, moneda y formato de fecha.":"Configure your language, currency, and date format.","Idioma":"Language",
+    "Moneda":"Currency","Boliviano (Bs)":"Bolivian boliviano (Bs)","Dólar (USD)":"US Dollar (USD)",
+    "TC dólar (Bs por USD)":"USD exchange rate (Bs per USD)","Formato de fecha":"Date format","Separador de miles":"Thousands separator",
+    "Periodo de presupuesto":"Budget period","Define el inicio del mes para tus presupuestos.":"Define the start of the month for your budgets.",
+    "Inicio del mes":"Month start","Día 1":"Day 1","Esta configuración se aplicará a tus presupuestos y reportes mensuales.":"This setting applies to your monthly budgets and reports.",
+    "Datos y almacenamiento":"Data & storage","Gestiona el almacenamiento y limpieza de datos.":"Manage data storage and cleanup.",
+    "Exportar datos":"Export data","Importar datos":"Import data","Perfil de usuario":"User profile","Tu información personal.":"Your personal information.",
+    "Zona horaria":"Time zone","Preferencias rápidas":"Quick preferences","Ajustes comunes de la aplicación.":"Common app settings.",
+    "Mostrar saldo en el resumen":"Show balance in summary","Recordatorios de presupuesto":"Budget reminders",
+    "Notificaciones por pendientes":"Pending-item notifications","Sugerencias de categorización":"Categorization suggestions",
+    "Compactar tabla de transacciones":"Compact transaction table",
+    "Ingresos":"Income","Total recibido este mes":"Total received this month","Gastos":"Expenses","Total gastado este mes":"Total spent this month",
+    "Saldo del mes":"Monthly balance","Ingresos menos gastos":"Income minus expenses","Presupuesto diario":"Daily budget",
+    "Disponible con tu presupuesto":"Available under your budget","Evolución mensual":"Monthly trend","Últimos 6 meses":"Last 6 months",
+    "Últimas transacciones":"Recent transactions","Ver todas →":"View all →","Fecha":"Date","Descripción":"Description","Categoría":"Category",
+    "Monto":"Amount","Estado de presupuesto":"Budget status","Ver detalle →":"View details →","No hay transacciones en este mes.":"No transactions this month.",
+    "Sin descripción":"No description","Sin categoría":"Uncategorized","Aún no tienes presupuestos registrados.":"You have no budgets registered yet.",
+    "Sin gastos registrados este mes.":"No expenses recorded this month.","Mes":"Month","Tipo":"Type","Todos":"All",
+    "Buscar":"Search","Todas":"All","Subcategoría":"Subcategory","Cuenta":"Account","Estado":"Status","Pendiente":"Pending",
+    "Categorizado":"Categorized","Desde":"From","Hasta":"To","Monto mínimo":"Minimum amount","Monto máximo":"Maximum amount",
+    "✓ Aplicar y conservar filtros":"✓ Apply and keep filters","Limpiar filtros":"Clear filters","+ Agregar transacción manual":"+ Add manual transaction",
+    "No hay transacciones para estos filtros.":"No transactions match these filters.","Acciones":"Actions","Editar transacción":"Edit transaction",
+    "Monto (Bs)":"Amount (Bs)","Cancelar":"Cancel","Guardar cambios":"Save changes","(ninguna)":"(none)",
+    "Nueva transacción":"New transaction","Gasto":"Expense","Ingreso":"Income","Guardar":"Save",
+    "No hay transacciones pendientes para estos filtros.":"No pending transactions match these filters.","Asignar":"Assign","(elegir)":"(choose)",
+    "➕ Nueva subcategoría":"➕ New subcategory","Se agregará dentro de":"It will be added under",
+    "Nombre de la subcategoría":"Subcategory name","Presupuesto mensual (Bs)":"Monthly budget (Bs)","Crear subcategoría":"Create subcategory",
+    "⚠️ Eliminar transacción":"⚠️ Delete transaction","Tipo:":"Type:","Categoría:":"Category:","Subcategoría:":"Subcategory:","Cuenta:":"Account:",
+    "La transacción desaparecerá de la aplicación.":"The transaction will disappear from the app.",
+    "También se eliminará de Supabase.":"It will also be deleted from Supabase.","La operación no se podrá deshacer desde la aplicación.":"This action cannot be undone from the app.",
+    "Eliminar (10)":"Delete (10)","⚠️ Eliminar subcategoría":"⚠️ Delete subcategory","de la categoría":"from the category",
+    "La subcategoría desaparecerá de esta categoría.":"The subcategory will disappear from this category.",
+    "Su presupuesto asociado será eliminado.":"Its associated budget will be deleted.",
+    "Las reglas automáticas asociadas a esta subcategoría dejarán de existir.":"Automatic rules associated with this subcategory will be removed.",
+    "⚠️ Eliminar categoría":"⚠️ Delete category","Se eliminará la categoría y todas sus subcategorías.":"The category and all its subcategories will be deleted.",
+    "Se eliminarán sus presupuestos y reglas automáticas asociadas.":"Its budgets and associated automatic rules will be deleted.",
+    "Las transacciones existentes no se eliminarán.":"Existing transactions will not be deleted.",
+    "Las transacciones asociadas quedarán sin categoría y sin subcategoría.":"Associated transactions will have no category or subcategory.",
+    "Sin categorías todavía.":"No categories yet.","Agregar categoría":"Add category","Subir extracto bancario":"Upload bank statement",
+    "Copia de seguridad":"Backup","Descargar copia (JSON)":"Download backup (JSON)","Restaurar desde archivo":"Restore from file",
+    "Borrar todos los datos":"Delete all data","Copiar":"Copy","Limpiar":"Clear",
+    "Exceso sobre presupuesto":"Over budget","Ajustes de presupuestos":"Budget settings","Gastos por categoría":"Expenses by category",
+    "Mayor gasto":"Highest spending","Gastado":"Spent","Disponible":"Available","Presupuesto:":"Budget:",
+    "Presupuesto":"Budget","Transacción":"Transaction","transacción":"transaction","transacciones":"transactions",
+    "Enero":"January","Febrero":"February","Marzo":"March","Abril":"April","Mayo":"May","Junio":"June","Julio":"July","Agosto":"August",
+    "Septiembre":"September","Octubre":"October","Noviembre":"November","Diciembre":"December",
+    "Lun":"Mon","Mar":"Tue","Mié":"Wed","Jue":"Thu","Vie":"Fri","Sáb":"Sat","Dom":"Sun"
+  };
+  const EN_ES=Object.fromEntries(Object.entries(ES_EN).map(([a,b])=>[b,a]));
+  function translateString(s, toEnglish){
+    let out=s;
+    const map=toEnglish?ES_EN:EN_ES;
+    for(const [from,to] of Object.entries(map)){
+      if(out.trim()===from) return to;
+    }
+    if(toEnglish){
+      out=out.replace(/(\d+) transacción\(es\)/g,'$1 transaction(s)').replace(/(\d+) transacciones/g,'$1 transactions');
+      out=out.replace(/Presupuesto: /g,'Budget: ').replace(/Gastado/g,'Spent').replace(/Disponible/g,'Available');
+      out=out.replace(/Últimas transacciones/g,'Recent transactions');
+    }else{
+      out=out.replace(/(\d+) transaction\(s\)/g,'$1 transacción(es)').replace(/(\d+) transactions/g,'$1 transacciones');
+      out=out.replace(/Budget: /g,'Presupuesto: ').replace(/Spent/g,'Gastado').replace(/Available/g,'Disponible');
+    }
+    return out;
+  }
+  function translateDom(toEnglish){
+    document.documentElement.lang=toEnglish?'en':'es';
+    const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+    const nodes=[];
+    while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(n=>{
+      const p=n.parentElement;
+      if(!p || ['SCRIPT','STYLE'].includes(p.tagName)) return;
+      const old=n.nodeValue;
+      const trimmed=old.trim();
+      if(!trimmed)return;
+      const translated=translateString(trimmed,toEnglish);
+      if(translated!==trimmed) n.nodeValue=old.replace(trimmed,translated);
+    });
+    document.querySelectorAll('input[placeholder],input[aria-label],button[aria-label],select[aria-label]').forEach(el=>{
+      for(const attr of ['placeholder','aria-label']){
+        if(el.hasAttribute(attr)){
+          const v=el.getAttribute(attr), nv=translateString(v,toEnglish);
+          if(nv!==v)el.setAttribute(attr,nv);
+        }
+      }
+    });
+  }
+  window.__nexoTranslateAll=translateDom;
+  let timer=null;
+  const observer=new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(()=>translateDom(localStorage.getItem('nexo-language')==='en'),0);});
+  observer.observe(document.body,{childList:true,subtree:true});
+  window.addEventListener('DOMContentLoaded',()=>translateDom(localStorage.getItem('nexo-language')==='en'));
+  setTimeout(()=>translateDom(localStorage.getItem('nexo-language')==='en'),300);
+})();
+</script>
 </body>
 </html>
