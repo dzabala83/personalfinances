@@ -456,6 +456,32 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
   mq?.addEventListener?.('change',()=>{if((document.documentElement.getAttribute('data-theme')||'system')==='system')sync();});
 })();
 </script>
+<style id="nexo-theme-system-text-v2">
+@media(prefers-color-scheme:dark){
+  :root[data-theme="system"] .nexo-greeting h1,
+  :root[data-theme="system"] .nexo-brand-title,
+  :root[data-theme="system"] .nexo-user,
+  :root[data-theme="system"] .nexo-config h1,
+  :root[data-theme="system"] .nexo-config h3,
+  :root[data-theme="system"] .nexo-config-tab,
+  :root[data-theme="system"] .nexo-theme strong,
+  :root[data-theme="system"] .nexo-fieldbox label,
+  :root[data-theme="system"] .nexo-fieldbox select,
+  :root[data-theme="system"] .mobile-category-heading h2,
+  :root[data-theme="system"] .mobile-category-name,
+  :root[data-theme="system"] .mobile-budget-title,
+  :root[data-theme="system"] .mobile-money-value,
+  :root[data-theme="system"] .mobile-category-progress b{color:var(--nexo-text)!important;}
+  :root[data-theme="system"] .nexo-greeting p,
+  :root[data-theme="system"] .nexo-config p,
+  :root[data-theme="system"] .nexo-theme small,
+  :root[data-theme="system"] .mobile-budget-total,
+  :root[data-theme="system"] .mobile-money-label,
+  :root[data-theme="system"] .mobile-money-note{color:var(--nexo-muted)!important;}
+  :root[data-theme="system"] .nexo-theme.active{background:#1d4f91!important;border-color:#60a5fa!important;}
+}
+/* THEME_MODE_V2_SYSTEM_TEXT */
+</style>
 </head>
 <body>
 
