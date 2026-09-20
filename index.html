@@ -562,6 +562,42 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
   }
 }
 </style>
+<style id="edit-transaction-modal-scale-v7">
+/* EDIT_TRANSACTION_MODAL_SCALE_V7 */
+@media(max-width:600px){
+  .edit-transaction-overlay{
+    padding:12px!important;
+  }
+  .edit-transaction-modal{
+    max-width:462px!important;
+    width:100%!important;
+    padding:17.6px!important;
+    border-radius:15.4px!important;
+  }
+  .edit-transaction-modal h3{
+    font-size:1.045rem!important;
+  }
+  .edit-transaction-modal .field{
+    margin-bottom:11px!important;
+  }
+  .edit-transaction-modal label{
+    font-size:.858rem!important;
+  }
+  .edit-transaction-modal input,
+  .edit-transaction-modal select{
+    padding:8.8px 11px!important;
+    font-size:.99rem!important;
+  }
+  .edit-transaction-modal .row-actions{
+    gap:8.8px!important;
+    margin-top:11px!important;
+  }
+  .edit-transaction-modal .row-actions button{
+    padding:11px 17.6px!important;
+    font-size:.968rem!important;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -1482,10 +1518,11 @@ function openEditTransaction(txId){
   const tx = state.transactions.find(t=>t.id===txId);
   if(!tx) return;
   const overlay=document.createElement('div');
+  overlay.className='edit-transaction-overlay';
   overlay.style='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;';
   const cats=state.categories.filter(c=>c.tipo===tx.tipo);
   overlay.innerHTML=`
-    <div class="card" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div class="card edit-transaction-modal" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
       <h3 class="cat-title">Editar transacción</h3>
       <div class="field"><label>Fecha</label><input type="date" id="eFecha" value="${tx.fecha||''}"></div>
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
