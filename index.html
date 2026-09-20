@@ -618,6 +618,12 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
 @media(max-width:600px){.nexo-currency-row{grid-template-columns:1fr 1fr;gap:10px;}}
 </style>
 <style id="smart-categorization-style-v11">.smart-suggestion{font-size:.78rem;color:var(--text);}</style>
+<style id="pending-learning-history-v12">
+/* PENDING_LEARNING_HISTORY_V12 */
+@media(max-width:600px){
+  #learningHistory{max-height:52vh;overflow:auto;}
+}
+</style>
 </head>
 <body>
 
@@ -1678,6 +1684,29 @@ function openManualForm(){
 /* ================= PENDIENTES ================= */
 function renderPendientes(app){
   const wrap=document.createElement('div');
+  const learning=document.createElement('div');
+  learning.className='card';
+  learning.style.marginBottom='14px';
+  const learnedRules=(state.rules||[]).filter(r=>r.keyword);
+  learning.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;" id="learningHeader">
+      <div><h3 style="margin:0;">🧠 Aprendizaje de NEXO</h3>
+      <p style="margin:4px 0 0;color:var(--muted);font-size:.82rem;">Historial de reglas aprendidas a partir de tus decisiones.</p></div>
+      <span id="learningChevron">⌄</span>
+    </div>
+    <div id="learningHistory" style="display:none;margin-top:12px;">
+      ${learnedRules.length?`<div style="display:grid;gap:7px;">
+      ${learnedRules.slice().reverse().map(r=>`<div style="padding:9px 10px;border:1px solid var(--border);border-radius:10px;">
+        <div style="font-weight:700;">“${escapeHtml(r.keyword)}”</div>
+        <div style="font-size:.76rem;color:var(--muted);margin-top:3px;">→ ${escapeHtml(r.categoria||'Sin categoría')}${r.subcategoria?' / '+escapeHtml(r.subcategoria):''}</div>
+      </div>`).join('')}
+      </div>`:`<div class="empty">Todavía no hay reglas aprendidas.</div>`}
+    </div>`;
+  wrap.appendChild(learning);
+  learning.querySelector('#learningHeader').onclick=()=>{
+    const body=learning.querySelector('#learningHistory'),ch=learning.querySelector('#learningChevron');
+    const open=body.style.display==='none'; body.style.display=open?'block':'none'; ch.textContent=open?'⌃':'⌄';
+  };
   const controls=document.createElement('div'); controls.className='card';
   controls.innerHTML=`<div class="search-panel" style="margin-top:0;">
     <div class="field search-wide"><label>Buscar</label><input type="search" id="pSearch" placeholder="Descripción, cuenta o referencia"></div>
