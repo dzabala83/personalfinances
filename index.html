@@ -1839,6 +1839,101 @@ function openManualForm(){
   };
 }
 
+async function savePendingAssignment(tx, newRuleIds=[]){
+  // Guardado rápido: una asignación pendiente no necesita sincronizar
+  // toda la aplicación. Solo enviamos la transacción y las reglas nuevas.
+  saveLocal();
+  if(!currentUser) return {cloud:false};
+
+  try{
+    const user_id=currentUser.id;
+    const cat=getCategory(tx.tipo,tx.categoria);
+    if(!cat) throw new Error('Categoría no encontrada.');
+
+    // Aseguramos que la categoría tenga UUID de Supabase.
+    let catId=cat.id;
+    if(!UUID_RE.test(catId||'')) catId=crypto.randomUUID();
+    cat.id=catId;
+
+    const catRow={
+      id:catId,usuario_id:user_id,nombre:cat.nombre,tipo:cat.tipo
+    };
+    let r=await supabaseClient.from('categorias').upsert([catRow],{onConflict:'id'});
+    if(r.error) throw r.error;
+
+    // Resolvemos la subcategoría solo si existe.
+    let subId=null;
+    if(tx.subcategoria){
+      const {data:sub,error:eSub}=await supabaseClient
+        .from('subcategorias')
+        .select('id')
+        .eq('usuario_id',user_id)
+        .eq('categoria_id',catId)
+        .eq('nombre',tx.subcategoria)
+        .limit(1)
+        .maybeSingle();
+      if(eSub) throw eSub;
+      subId=sub?.id||null;
+    }
+
+    // Guardamos únicamente las reglas creadas por esta decisión.
+    const rulesToSave=(state.rules||[]).filter(r=>newRuleIds.includes(r.id));
+    if(rulesToSave.length){
+      const ruleRows=rulesToSave.map(x=>({
+        id:UUID_RE.test(x.id||'')?x.id:crypto.randomUUID(),
+        usuario_id:user_id,
+        palabra_clave:x.keyword,
+        categoria_id:catId,
+        subcategoria_id:x.subcategoria ? subId : null
+      }));
+      rulesToSave.forEach((x,i)=>x.id=ruleRows[i].id);
+      r=await supabaseClient.from('reglas_categorizacion').upsert(ruleRows,{onConflict:'id'});
+      if(r.error) throw r.error;
+    }
+
+    // Una sola transacción modificada.
+    const txRow={
+      id:UUID_RE.test(tx.id||'')?tx.id:crypto.randomUUID(),
+      usuario_id:user_id,
+      fecha:tx.fecha,
+      descripcion:tx.descripcion,
+      monto:Number(tx.monto)||0,
+      tipo:tx.tipo,
+      categoria_id:catId,
+      subcategoria_id:subId,
+      cuenta:tx.cuenta||null,
+      origen:tx.origen||null,
+      estado:'categorizado',
+      referencia_id:tx.refId||null,
+      metadata:{}
+    };
+    tx.id=txRow.id;
+    r=await supabaseClient.from('transacciones').upsert([txRow],{onConflict:'id'});
+    if(r.error) throw r.error;
+
+    // Actualizamos la foto local de nube para que el siguiente guardado
+    // no vuelva a considerar esta transacción/regla como pendiente.
+    cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};
+    const txIndex=cloudSnapshot.transactions.findIndex(x=>x.id===tx.id);
+    const txCloud={...tx};
+    if(txIndex>=0) cloudSnapshot.transactions[txIndex]=txCloud;
+    else cloudSnapshot.transactions.push(txCloud);
+    for(const x of rulesToSave){
+      const idx=cloudSnapshot.rules.findIndex(r=>r.id===x.id);
+      if(idx>=0) cloudSnapshot.rules[idx]={...x};
+      else cloudSnapshot.rules.push({...x});
+    }
+
+    saveLocal();
+    cloudActive=true;
+    return {cloud:true};
+  }catch(error){
+    console.error('Error guardando categorización rápida:',error);
+    cloudActive=false;
+    return {cloud:false,error};
+  }
+}
+
 /* ================= PENDIENTES ================= */
 function renderPendientes(app){
   const wrap=document.createElement('div');
@@ -1899,10 +1994,23 @@ function renderPendientes(app){
       function refreshCats(){const cats=tipoSel.value==='Gasto'?gastoCats:incCats;catSel.innerHTML='<option value="">(elegir)</option>'+cats.map(c=>`<option value="${escapeHtml(c.nombre)}" ${c.nombre===t.categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('');refreshSubs();}
       function refreshSubs(){const cat=getCategory(tipoSel.value,catSel.value),subs=cat?cat.subcategorias:[];subSel.innerHTML='<option value="">(ninguna)</option>'+subs.map(s=>`<option value="${escapeHtml(s)}" ${s===t.subcategoria?'selected':''}>${escapeHtml(s)}</option>`).join('');}
       tipoSel.onchange=refreshCats;catSel.onchange=refreshSubs;refreshCats();
-      div.querySelector('[data-assign]').onclick=()=>{const newCatName=div.querySelector('.pNewCat').value.trim(),tipo=tipoSel.value;let catName=catSel.value;if(newCatName){catName=newCatName;if(!getCategory(tipo,catName))state.categories.push({id:uid('cat'),tipo,nombre:catName,subcategorias:[],presupuesto:0,subPresupuestos:{}});}if(!catName){showToast('Elige o crea una categoría');return;}const sub=subSel.value||null;t.tipo=tipo;t.categoria=catName;t.subcategoria=sub;t.estado='categorizado';
+      div.querySelector('[data-assign]').onclick=async()=>{const btn=div.querySelector('[data-assign]');if(btn.disabled)return;const newCatName=div.querySelector('.pNewCat').value.trim(),tipo=tipoSel.value;let catName=catSel.value;if(newCatName){catName=newCatName;if(!getCategory(tipo,catName))state.categories.push({id:uid('cat'),tipo,nombre:catName,subcategorias:[],presupuesto:0,subPresupuestos:{}});}if(!catName){showToast('Elige o crea una categoría');return;}const sub=subSel.value||null;
+      const rulesBefore=new Set((state.rules||[]).map(r=>r.id));
+      t.tipo=tipo;t.categoria=catName;t.subcategoria=sub;t.estado='categorizado';
       t.confidence=100;t.suggestedCategoria=null;t.suggestedSubcategoria=null;t.suggestionSource='manual';
       if(div.querySelector('.pLearn')?.checked && window.learnCategorization) window.learnCategorization(t,true);
-      saveState();showToast('Transacción categorizada y aprendizaje guardado');render();};
+      const newRuleIds=(state.rules||[]).filter(r=>!rulesBefore.has(r.id)).map(r=>r.id);
+      btn.disabled=true;btn.textContent='Guardando…';
+      const result=await savePendingAssignment(t,newRuleIds);
+      if(result.cloud){
+        showToast('Transacción categorizada y guardada ✓');
+        render();
+      }else{
+        btn.disabled=false;btn.textContent='Asignar';
+        showToast('Se guardó localmente; la nube tardó o no respondió.');
+        render();
+      }
+      };
     });
   }
   ['pTipo','pCuenta','pDesde','pHasta'].forEach(id=>controls.querySelector('#'+id).onchange=renderList);
