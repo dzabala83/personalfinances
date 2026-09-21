@@ -14,14 +14,6 @@
   --yellow:#d97706; --yellow-soft:#fef3c7; --red:#dc2626; --red-soft:#fee2e2;
   --income:#0891b2; --income-soft:#cffafe;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --bg:#111318; --card:#1a1d24; --text:#e8e9ec; --muted:#9aa0ab; --border:#2b2f38;
-    --accent:#60a5fa; --accent-soft:#1e3a5f; --green:#4ade80; --green-soft:#14432a;
-    --yellow:#fbbf24; --yellow-soft:#4a3a12; --red:#f87171; --red-soft:#4a1d1d;
-    --income:#22d3ee; --income-soft:#0e3a44;
-  }
-}
 :root[data-theme="dark"]{
   --bg:#111318; --card:#1a1d24; --text:#e8e9ec; --muted:#9aa0ab; --border:#2b2f38;
   --accent:#60a5fa; --accent-soft:#1e3a5f; --green:#4ade80; --green-soft:#14432a;
@@ -296,7 +288,7 @@ body{background:var(--approved-page);color:var(--approved-blue-dark);padding:0}
 .nexo-topbar{height:82px;padding:0 34px 0 30px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--approved-line);box-shadow:none;position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between}
 .nexo-greeting h1{margin:0;font-size:1.48rem;line-height:1.15;color:#102b67;font-weight:800}.nexo-greeting p{margin:6px 0 0;color:#8290a8;font-size:.86rem}
 .nexo-header-actions{display:flex;align-items:center;gap:18px}.nexo-month-select{height:46px;min-width:220px;border:1px solid #dfe6f0;border-radius:12px;background:#fff;padding:0 14px;color:#132d68;font-weight:650;font-size:.9rem}
-.nexo-user{display:flex;align-items:center;gap:10px;color:#102b67;font-weight:650}.nexo-avatar{width:42px;height:42px;border-radius:50%;background:#edf2ff;color:#3163d7;display:grid;place-items:center;font-weight:800}.nexo-user-chevron{font-size:1.1rem;color:#53688d}.nexo-sync-mini{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.1);margin-left:3px}
+.nexo-user{display:flex;align-items:center;gap:10px;color:#102b67;font-weight:650} .nexo-user{cursor:pointer;user-select:none}.nexo-user:focus-visible{outline:2px solid #1769dc;outline-offset:3px}.nexo-user:hover .nexo-avatar{box-shadow:0 0 0 4px rgba(23,105,220,.10)}.nexo-avatar{width:42px;height:42px;border-radius:50%;background:#edf2ff;color:#3163d7;display:grid;place-items:center;font-weight:800}.nexo-user-chevron{font-size:1.1rem;color:#53688d}.nexo-sync-mini{width:8px;height:8px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.1);margin-left:3px}
 .nexo-layout{display:grid;grid-template-columns:224px minmax(0,1fr);min-height:calc(100vh - 82px)}
 #tabNav{position:sticky;top:82px;height:calc(100vh - 82px);display:flex;flex-direction:column;gap:5px;padding:26px 12px 20px;background:#fff;border-right:1px solid var(--approved-line);overflow-y:auto;z-index:20}
 #tabNav .nexo-sidebar-brand{padding:2px 22px 30px}.brand-main{font-size:1.75rem;line-height:1;color:#102b67;font-weight:850}.brand-sub{font-size:.82rem;letter-spacing:.34em;color:#1677e8;margin-top:5px}
@@ -624,7 +616,33 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
   #learningHistory{max-height:52vh;overflow:auto;}
 }
 </style>
-</head>
+<script id="nexo-theme-init">
+(function(){
+  const KEY='nexo-theme';
+  function effective(pref){
+    if(pref==='dark')return'dark';
+    if(pref==='system')return window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+    return'light';
+  }
+  function apply(pref){
+    pref=(pref==='dark'||pref==='system')?pref:'light';
+    document.documentElement.dataset.theme=effective(pref);
+    document.documentElement.dataset.themePreference=pref;
+    try{localStorage.setItem(KEY,pref);}catch(e){}
+    return document.documentElement.dataset.theme;
+  }
+  const saved=(()=>{try{return localStorage.getItem(KEY)||'light';}catch(e){return'light';}})();
+  window.__nexoThemePreference=saved;
+  window.__nexoApplyTheme=apply;
+  apply(saved);
+  if(window.matchMedia){
+    const mq=window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange=()=>{if(window.__nexoThemePreference==='system')apply('system');};
+    mq.addEventListener?.('change',onChange);
+    mq.addListener?.(onChange);
+  }
+})();
+</script></head>
 <body>
 
 <div id="authGate" class="nexo-auth-gate">
@@ -649,7 +667,7 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
   </div>
 </div>
 
-<header class="nexo-topbar"><div class="nexo-greeting"><h1>Hola, José Daniel 👋</h1><p>Aquí tienes el resumen de tus finanzas.</p></div><div class="nexo-header-actions"><select id="nexoMonthSelect" class="nexo-month-select" aria-label="Seleccionar mes"></select><div class="nexo-user"><span id="nexoSyncDot" class="nexo-sync-mini"></span><div class="nexo-avatar">JD</div><span class="nexo-user-name">José Daniel</span><span class="nexo-user-chevron">⌄</span></div><button id="logoutBtn" class="btn secondary nexo-logout" type="button" style="display:none;">Cerrar sesión</button></div></header><div class="nexo-layout"><nav id="tabNav" aria-label="Navegación principal"></nav><main id="app"></main></div>
+<header class="nexo-topbar"><div class="nexo-greeting"><h1>Hola, José Daniel 👋</h1><p>Aquí tienes el resumen de tus finanzas.</p></div><div class="nexo-header-actions"><select id="nexoMonthSelect" class="nexo-month-select" aria-label="Seleccionar mes"></select><div class="nexo-user" id="nexoProfileBtn" role="button" tabindex="0" aria-label="Abrir configuración del perfil"><span id="nexoSyncDot" class="nexo-sync-mini"></span><div class="nexo-avatar">JD</div><span class="nexo-user-name">José Daniel</span><span class="nexo-user-chevron">⌄</span></div><button id="logoutBtn" class="btn secondary nexo-logout" type="button" style="display:none;">Cerrar sesión</button></div></header><div class="nexo-layout"><nav id="tabNav" aria-label="Navegación principal"></nav><main id="app"></main></div>
 
 <div class="toast" id="toast"></div>
 <div id="mobileBottomNav" class="mobile-bottom-nav" aria-label="Navegación móvil">
@@ -1147,6 +1165,7 @@ function renderConfiguracion(app){
   const wrap=document.createElement('div'); wrap.className='nexo-config';
   const email=currentUser?.email||'';
   const initials=(currentUser?.user_metadata?.full_name||'José Daniel').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();
+  const themePref=localStorage.getItem('nexo-theme')||'light';
   wrap.innerHTML=`
     <div class="nexo-config-head"><div><h1>Configuración</h1><p>Personaliza tu experiencia en NEXO FINANZAS.</p></div></div>
     <div class="nexo-config-tabs">
@@ -1154,7 +1173,7 @@ function renderConfiguracion(app){
     </div>
     <div class="nexo-config-grid"><div class="nexo-config-col">
       <section class="nexo-config-card"><div class="nexo-config-card-head"><div class="nexo-config-card-icon">🎨</div><div><h3>Apariencia</h3><p>Elige el estilo de la aplicación.</p></div></div><div class="nexo-theme-grid">
-        <button class="nexo-theme active" data-theme="light"><span class="nexo-theme-icon">☀️</span><span><strong>Claro</strong></span><span class="nexo-radio"></span></button><button class="nexo-theme" data-theme="dark"><span class="nexo-theme-icon">🌙</span><span><strong>Oscuro</strong></span><span class="nexo-radio"></span></button><button class="nexo-theme" data-theme="system"><span class="nexo-theme-icon">🖥️</span><span><strong>Sistema</strong><small>Usar la configuración de tu dispositivo</small></span><span class="nexo-radio"></span></button>
+        <button class="nexo-theme ${themePref==='light'?'active':''}" data-theme="light"><span class="nexo-theme-icon">☀️</span><span><strong>Claro</strong></span><span class="nexo-radio"></span></button><button class="nexo-theme ${themePref==='dark'?'active':''}" data-theme="dark"><span class="nexo-theme-icon">🌙</span><span><strong>Oscuro</strong></span><span class="nexo-radio"></span></button><button class="nexo-theme ${themePref==='system'?'active':''}" data-theme="system"><span class="nexo-theme-icon">🖥️</span><span><strong>Sistema</strong><small>Usar la configuración de tu dispositivo</small></span><span class="nexo-radio"></span></button>
       </div></section>
       <section class="nexo-config-card"><div class="nexo-config-card-head"><div class="nexo-config-card-icon">🌐</div><div><h3>Idioma y moneda</h3><p>Configura tu idioma, moneda y formato de fecha.</p></div></div><div class="nexo-form-grid">
         <div class="nexo-fieldbox"><label>Idioma</label><select id="nexoLanguage"><option value="es">Español</option><option value="en">English</option></select></div>
@@ -1173,7 +1192,13 @@ function renderConfiguracion(app){
       </div></section>
     </div></div>`;
   wrap.querySelectorAll('.nexo-switch').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('on')));
-  wrap.querySelectorAll('.nexo-theme').forEach(b=>b.addEventListener('click',()=>{wrap.querySelectorAll('.nexo-theme').forEach(x=>x.classList.remove('active'));b.classList.add('active');}));
+  wrap.querySelectorAll('.nexo-theme').forEach(b=>b.addEventListener('click',()=>{
+    const pref=b.dataset.theme||'light';
+    window.__nexoThemePreference=pref;
+    window.__nexoApplyTheme?.(pref);
+    wrap.querySelectorAll('.nexo-theme').forEach(x=>x.classList.toggle('active',x.dataset.theme===pref));
+    showToast(pref==='dark'?'Modo oscuro activado.':pref==='system'?'Modo sistema activado.':'Modo claro activado.');
+  }));
   const langSelect=wrap.querySelector('#nexoLanguage');
   const currencySelect=wrap.querySelector('#nexoCurrency');
   const tcField=wrap.querySelector('#nexoTcField');
@@ -3379,6 +3404,19 @@ document.addEventListener('click', async (event) => {
     const words=tokens(tx.descripcion||'').filter(w=>w.length>=4).filter(w=>!['debito','credito','referencia','cuenta','transferencia'].includes(w));
     words.slice(0,5).forEach(w=>{ if(!(state.rules||[]).find(r=>normalize(r.keyword)===w&&r.tipo===tx.tipo)) state.rules.push({id:uid('rule'),keyword:w,tipo:tx.tipo,categoria:tx.categoria,subcategoria:tx.subcategoria||null}); });
   };
+})();
+</script>
+<script id="nexo-profile-button-fix">
+(function(){
+  function bind(){
+    const b=document.getElementById('nexoProfileBtn');
+    if(!b||b.dataset.bound==='1')return;
+    b.dataset.bound='1';
+    const open=()=>{currentTab='config';render();};
+    b.addEventListener('click',open);
+    b.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind);else bind();
 })();
 </script>
 </body>
