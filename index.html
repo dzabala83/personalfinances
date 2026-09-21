@@ -329,7 +329,20 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
 .approved-legend{display:flex;flex-direction:column;gap:8px;font-size:.75rem}.approved-legend-row{display:grid;grid-template-columns:12px 1fr auto auto;gap:8px;align-items:center}.approved-legend-dot{width:10px;height:10px;border-radius:50%}.approved-legend-name{color:#1b376e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.approved-legend-amount{color:#1d376b;font-weight:650;white-space:nowrap}.approved-legend-pct{color:#7b879d;white-space:nowrap}
 .approved-bottom-grid{display:grid;grid-template-columns:1.25fr .85fr;gap:16px}.approved-table{width:100%;border-collapse:collapse;font-size:.78rem}.approved-table th,.approved-table td{padding:11px 16px;border-bottom:1px solid #edf0f5;white-space:nowrap}.approved-table th{font-size:.72rem;text-transform:none;color:#71809a;background:#fbfcfe;font-weight:600}.approved-table td{color:#233c70}.approved-table tr:last-child td{border-bottom:0}
 .approved-amount-gasto{color:#e23f4c!important;font-weight:750}.approved-amount-ingreso{color:#159466!important;font-weight:750}.approved-cat-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:12px;background:#eef3ff;color:#244986;font-weight:650}
-.approved-budget-list{padding:14px 18px 16px;display:flex;flex-direction:column;gap:13px}.approved-budget-row{display:grid;grid-template-columns:28px 1fr 120px 38px;gap:9px;align-items:center;font-size:.76rem}.approved-budget-icon{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#edf4ff}.approved-budget-name{min-width:0}.approved-budget-name strong{display:block;color:#19376d;font-size:.76rem;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.approved-budget-track{height:9px;background:#edf1f6;border-radius:8px;overflow:hidden;margin-top:5px}.approved-budget-fill{height:100%;border-radius:8px}.approved-budget-meta{color:#5e6e89;white-space:nowrap;text-align:right}.approved-budget-pct{text-align:right;color:#6d7a91}.approved-panel-link{border:0;background:none;color:#1677e8;font-size:.8rem;font-weight:650}.approved-empty{padding:30px;text-align:center;color:#7b879d;font-size:.84rem}
+.approved-budget-list{padding:14px 18px 16px;display:flex;flex-direction:column;gap:13px}.approved-budget-row{display:grid;grid-template-columns:28px 1fr 120px 38px;gap:9px;align-items:center;font-size:.76rem}
+/* TOP 10 — transacciones más grandes */
+.approved-top10-list{padding:4px 18px 10px}
+.approved-top10-row{display:grid;grid-template-columns:38px 46px minmax(180px,1fr) minmax(180px,1.15fr) 130px;gap:12px;align-items:center;min-height:78px;border-bottom:1px solid #edf0f5}
+.approved-top10-row:last-child{border-bottom:0}
+.approved-top10-rank{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#edf4ff;color:#163b78;font-size:.9rem;font-weight:800}
+.approved-top10-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:1.25rem}
+.approved-top10-icon.red{background:#ffe6e8;color:#ef4f59}.approved-top10-icon.purple{background:#eee6ff;color:#7a49d8}.approved-top10-icon.blue{background:#e2f2ff;color:#1479dc}.approved-top10-icon.green{background:#e3f6e7;color:#21a05b}.approved-top10-icon.yellow{background:#fff1d2;color:#e7a21d}.approved-top10-icon.pink{background:#fbe4fb;color:#c84dcc}.approved-top10-icon.gray{background:#edf1f6;color:#8795aa}
+.approved-top10-info{min-width:0}.approved-top10-desc{font-size:.92rem;font-weight:800;color:#102b67;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.approved-top10-meta{font-size:.76rem;color:#74839d;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.approved-top10-bar{height:16px;border-radius:9px;background:#edf1f6;overflow:hidden}.approved-top10-fill{height:100%;border-radius:9px;min-width:2px}.approved-top10-fill.red{background:#ef555e}.approved-top10-fill.purple{background:#7b4bd8}.approved-top10-fill.blue{background:#438fdc}.approved-top10-fill.green{background:#28aa63}.approved-top10-fill.yellow{background:#f0ad28}.approved-top10-fill.pink{background:#ca52d5}.approved-top10-fill.gray{background:#9aa7b9}
+.approved-top10-value{text-align:right}.approved-top10-amount{font-size:1rem;font-weight:850;color:#102b67;white-space:nowrap}.approved-top10-pct{font-size:.8rem;color:#71809a;margin-top:5px;white-space:nowrap}
+.approved-top10-empty{padding:36px 20px;text-align:center;color:#7b879d;font-size:.84rem}
+@media(max-width:900px) and (min-width:601px){.approved-top10-row{grid-template-columns:34px 42px minmax(140px,1fr) minmax(140px,1fr) 105px;gap:9px}.approved-top10-amount{font-size:.9rem}}
+@media(max-width:600px){.approved-top10-list{padding:2px 12px 8px}.approved-top10-row{grid-template-columns:30px 42px minmax(0,1fr) 88px;gap:8px;min-height:72px}.approved-top10-rank{width:30px;height:30px;font-size:.78rem}.approved-top10-icon{width:42px;height:42px;font-size:1.05rem}.approved-top10-info{grid-column:3}.approved-top10-bar{grid-column:3 / 5;height:12px;margin-top:-2px}.approved-top10-value{grid-column:4;grid-row:1;align-self:center}.approved-top10-desc{font-size:.8rem}.approved-top10-meta{font-size:.68rem}.approved-top10-amount{font-size:.84rem}.approved-top10-pct{font-size:.68rem;margin-top:3px}}.approved-budget-icon{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#edf4ff}.approved-budget-name{min-width:0}.approved-budget-name strong{display:block;color:#19376d;font-size:.76rem;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.approved-budget-track{height:9px;background:#edf1f6;border-radius:8px;overflow:hidden;margin-top:5px}.approved-budget-fill{height:100%;border-radius:8px}.approved-budget-meta{color:#5e6e89;white-space:nowrap;text-align:right}.approved-budget-pct{text-align:right;color:#6d7a91}.approved-panel-link{border:0;background:none;color:#1677e8;font-size:.8rem;font-weight:650}.approved-empty{padding:30px;text-align:center;color:#7b879d;font-size:.84rem}
 @media(max-width:1050px) and (min-width:601px){.approved-kpis{grid-template-columns:repeat(2,1fr)}.approved-grid,.approved-bottom-grid{grid-template-columns:1fr}}
 @media(max-width:600px){body{background:#f7f9fd;padding-bottom:78px}.nexo-topbar{height:72px;padding:0 14px}.nexo-greeting h1{font-size:1rem}.nexo-greeting p{font-size:.68rem;margin-top:3px}.nexo-header-actions{gap:7px}.nexo-month-select{min-width:0;width:112px;height:38px;padding:0 7px;font-size:.68rem}.nexo-user-name,.nexo-user-chevron,.nexo-sync-mini{display:none}.nexo-avatar{width:36px;height:36px}.nexo-layout{display:block;min-height:auto}#tabNav{display:none!important}main#app{padding:0 12px 30px}.approved-dashboard{padding-top:14px}.approved-kpis{grid-template-columns:1fr 1fr;gap:10px}.approved-kpi{min-height:112px;padding:13px;grid-template-columns:36px 1fr;gap:9px;border-radius:14px}.approved-kpi-icon{width:36px;height:36px;font-size:1rem}.approved-kpi-label{font-size:.68rem}.approved-kpi-value{font-size:1rem}.approved-kpi-note{font-size:.62rem}.approved-grid,.approved-bottom-grid{grid-template-columns:1fr;gap:12px}.approved-panel-head{height:52px;padding:0 13px}.approved-panel-head h2{font-size:.9rem}.approved-chart-wrap{height:245px;padding:10px}.approved-donut-wrap{height:auto;grid-template-columns:1fr;padding:10px 12px 16px}.approved-donut-wrap canvas{max-height:190px!important}.approved-legend{padding:0 6px 4px}.approved-table{font-size:.7rem}.approved-table th,.approved-table td{padding:9px 10px}.approved-bottom-grid .approved-panel:first-child{overflow-x:auto}.approved-budget-row{grid-template-columns:26px 1fr 94px 32px;gap:6px}}
 </style><style id="nexo-config-v1">
@@ -1500,7 +1513,7 @@ function renderDashboard(app){
 
   const bottom=document.createElement('div');bottom.className='approved-bottom-grid';
   const txPanel=document.createElement('section');txPanel.className='approved-panel';
-  txPanel.innerHTML='<div class="approved-panel-head"><h2>Últimas transacciones</h2><button class="approved-panel-link" id="approvedViewAll">Ver todas →</button></div><div class="table-wrap"><table class="approved-table"><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th style="text-align:right">Monto</th></tr></thead><tbody id="approvedTxBody"></tbody></table></div>';
+  txPanel.innerHTML='<div class="approved-panel-head"><div><h2>Top 10 transacciones más grandes</h2><div style="font-size:.76rem;color:#74839d;margin-top:4px">Las 10 transacciones de mayor monto en el período actual</div></div><button class="approved-panel-link" id="approvedViewAll">Ver todas →</button></div><div id="approvedTop10List" class="approved-top10-list"></div>';
   bottom.appendChild(txPanel);
   const budgetPanel=document.createElement('section');budgetPanel.className='approved-panel';
   budgetPanel.innerHTML='<div class="approved-panel-head"><h2>Estado de presupuesto</h2><button class="approved-panel-link" id="approvedBudgetDetail">Ver detalle →</button></div><div id="approvedBudgetList" class="approved-budget-list"></div>';
@@ -1518,10 +1531,42 @@ function renderDashboard(app){
   const catEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const palette=['#2385ee','#20ad78','#f5b72f','#ef646d','#8958df','#58a8e8','#a6afc1','#e07b32','#5f6fd7','#27a5a0'];
   const totalCat=catEntries.reduce((s,x)=>s+x[1],0);
 
-  const txBody=document.getElementById('approvedTxBody');const recent=[...txMonth].sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))).slice(0,5);
-  const catIcons={'Comida':'🍴','Transporte':'🚕','Vivienda':'⌂','Salud':'✚','Entretenimiento':'◉','Auto':'🚗','Compras':'▣','Otros':'•••','Vestimenta':'👕','Deudas':'▰'};
-  if(!recent.length)txBody.innerHTML='<tr><td colspan="4"><div class="approved-empty">No hay transacciones en este mes.</div></td></tr>';
-  recent.forEach(t=>{const tr=document.createElement('tr');const ingreso=t.tipo==='Ingreso';tr.innerHTML='<td>'+escapeHtml(t.fecha||'')+'</td><td>'+escapeHtml(t.descripcion||'Sin descripción')+'</td><td><span class="approved-cat-pill">'+(catIcons[t.categoria]||'•')+' '+escapeHtml(t.categoria||'Sin categoría')+'</span></td><td class="'+(ingreso?'approved-amount-ingreso':'approved-amount-gasto')+'" style="text-align:right">'+(ingreso?'+ ':'- ')+fmtMoney(t.monto)+'</td>';txBody.appendChild(tr);});
+  const catIcons={'Comida':'🍴','Transporte':'🚕','Vivienda':'⌂','Salud':'✚','Entretenimiento':'◉','Auto':'🚗','Compras':'▣','Otros':'•••','Vestimenta':'👕','Deudas':'▰','Ahorros':'🐷'};
+  const top10List=document.getElementById('approvedTop10List');
+  const top10=[...txMonth].filter(t=>Number(t.monto||0)>0).sort((a,b)=>Number(b.monto||0)-Number(a.monto||0)||String(b.fecha).localeCompare(String(a.fecha))).slice(0,10);
+  const top10Total=txMonth.reduce((s,t)=>s+(Number(t.monto||0)>0?Number(t.monto||0):0),0);
+  const top10Max=top10.length?Number(top10[0].monto||0):0;
+  const top10Tone=(t)=>{
+    if(t.tipo==='Ingreso') return 'green';
+    const c=t.categoria||'';
+    if(c==='Vivienda'||c==='Deudas') return 'red';
+    if(c==='Ahorros') return 'purple';
+    if(c==='Comida'||c==='Auto'||c==='Transporte') return 'yellow';
+    if(c==='Compras'||c==='Vestimenta') return 'pink';
+    if(c==='Salud') return 'green';
+    if(c==='Otros') return 'gray';
+    return 'blue';
+  };
+  if(top10List){
+    top10List.innerHTML='';
+    if(!top10.length){
+      top10List.innerHTML='<div class="approved-top10-empty">No hay transacciones registradas en este mes.</div>';
+    }else{
+      top10.forEach((t,i)=>{
+        const tone=top10Tone(t), amount=Number(t.monto||0), pct=top10Total?amount/top10Total*100:0;
+        const row=document.createElement('div');row.className='approved-top10-row';
+        const date=t.fecha?new Date(t.fecha+'T12:00:00'):null;
+        const dateText=date?date.toLocaleDateString('es-BO',{day:'2-digit',month:'short',year:'numeric'}).replace(/ de /g,' '):'';
+        const typeLabel=t.tipo==='Ingreso'?'Ingreso':(t.categoria||'Gasto');
+        row.innerHTML='<div class="approved-top10-rank">'+(i+1)+'</div>'+
+          '<div class="approved-top10-icon '+tone+'">'+(catIcons[t.categoria]||'▣')+'</div>'+
+          '<div class="approved-top10-info"><div class="approved-top10-desc">'+escapeHtml(t.descripcion||'Sin descripción')+'</div><div class="approved-top10-meta">'+escapeHtml(typeLabel)+' · '+escapeHtml(dateText)+'</div></div>'+
+          '<div class="approved-top10-bar"><div class="approved-top10-fill '+tone+'" style="width:'+(top10Max?Math.max(2,amount/top10Max*100):0)+'%"></div></div>'+
+          '<div class="approved-top10-value"><div class="approved-top10-amount">Bs '+amount.toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2})+'</div><div class="approved-top10-pct">'+pct.toFixed(1)+'%</div></div>';
+        top10List.appendChild(row);
+      });
+    }
+  }
   document.getElementById('approvedViewAll').onclick=()=>{currentTab='transacciones';render();};
 
   const budgetList=document.getElementById('approvedBudgetList');
