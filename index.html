@@ -2513,6 +2513,13 @@ async function handlePdfFile(file){
     return;
   }
 
+  // Detectamos el formato BMSC por sus encabezados y columnas características.
+  const joinedHead=lines.slice(0,35).join(' ').toUpperCase();
+  if(/MAKROBANX/.test(joinedHead) && /DEBITOS/.test(joinedHead) && /CREDITOS/.test(joinedHead) && /SALDO/.test(joinedHead)){
+    processBmscPdfLines(lines);
+    return;
+  }
+
   const rows = lines.map(line=>line.split(/\s{2,}|\t+/).map(v=>v.trim()).filter(Boolean));
   const before = state.transactions.length;
   processBankRows(rows);
@@ -2529,6 +2536,96 @@ async function handlePdfFile(file){
 function escapeHtml(value){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
+function processBmscPdfLines(lines){
+  const resultDiv = document.getElementById('uploadResult');
+  let imported=0, autoCat=0, pendientes=0, duplicadas=0;
+  const existingRefs = new Set(state.transactions.map(t=>t.refId).filter(Boolean));
+  const txs=[];
+  let block=[];
+
+  function flushBlock(){
+    if(!block.length)return;
+    const joined=block.join(' ').replace(/\s+/g,' ').trim();
+    const dateMatch=joined.match(/(\\d{4}\/\\d{2}\/\\d{2})/);
+    if(!dateMatch){block=[];return;}
+    const rest=joined.slice(dateMatch.index + dateMatch[0].length).trim();
+    const moneyMatch=rest.match(/([\\d.,]+)\\s+([\\d.,]+)(?:\\s+([\\d.,]+))?\\s*$/);
+    const codeMatch=rest.match(/(\\d{3,6}-\\d{5,8})/);
+    if(!moneyMatch || !codeMatch){block=[];return;}
+
+    const fecha=dateMatch[1].replace(/\//g,'-');
+    const debito=parseAmount(moneyMatch[1]);
+    const credito=parseAmount(moneyMatch[2]);
+    if(debito===0 && credito===0){block=[];return;}
+    const tipo=debito>0?'Gasto':'Ingreso';
+    const monto=debito>0?debito:credito;
+    let desc=joined.slice(dateMatch.index + dateMatch[0].length);
+    desc=desc.replace(codeMatch[0],'').replace(/([\\d.,]+\\s+){2,3}$/,'').trim();
+
+    // En el PDF BMSC la descripción suele estar antes de la fecha.
+    const beforeDate=joined.slice(0,dateMatch.index).trim();
+    const beforeClean=beforeDate.replace(/^\\d{2}:\\d{2}\\s+[A-Z]{2}\\s+[\\d.,]+\\s*/,'').trim();
+    if(beforeClean) desc=(beforeClean+' '+desc).trim();
+    desc=desc.replace(/\\s+/g,' ').trim();
+
+    const refId=codeMatch[0]+'|'+fecha+'|'+monto;
+    if(existingRefs.has(refId)){duplicadas++;block=[];return;}
+    existingRefs.add(refId);
+
+    const smart=matchRules(desc,tipo);
+    const autoThreshold=85;
+    const rule=smart&&smart.confidence>=autoThreshold?smart:null;
+    state.transactions.push({
+      id:uid('tx'),fecha,descripcion:desc||'(sin descripción)',monto,tipo,
+      categoria:rule?rule.categoria:null,subcategoria:rule?rule.subcategoria:null,
+      cuenta:'BMSC',banco:'Banco Mercantil Santa Cruz',origen:'extracto',
+      estado:rule?'categorizado':'pendiente',confidence:smart?.confidence||0,
+      suggestedCategoria:smart?.categoria||null,suggestedSubcategoria:smart?.subcategoria||null,
+      suggestionSource:smart?.source||null,refId
+    });
+    imported++;
+    if(rule)autoCat++;else pendientes++;
+    block=[];
+  }
+
+  for(const line0 of lines){
+    const line=String(line0||'').replace(/\\u00ad/g,'').trim();
+    if(!line)continue;
+    if(/^FECHA\\s+HORA\\s+TRANSACCION/i.test(line))continue;
+    if(/^SALDO ANTERIOR|^TOTAL DEBITOS|^TOTAL CREDITOS|^SALDO A LA FECHA/i.test(line))continue;
+
+    // Una línea con fecha, código y débitos/créditos puede contener toda la operación.
+    if(/\\d{4}\/\\d{2}\/\\d{2}/.test(line) && /\\d{3,6}-\\d{5,8}/.test(line) && /\\d[\\d.,]*\\s+\\d[\\d.,]*/.test(line)){
+      block.push(line);
+      flushBlock();
+      continue;
+    }
+
+    // El PDF normalmente separa hora/saldo, descripción y luego fecha/código/importes.
+    if(/^\\d{2}:\\d{2}\\s+[A-Z]{2}\\s+[\\d.,]+$/.test(line)){
+      flushBlock();
+      block=[line];
+      continue;
+    }
+
+    if(block.length)block.push(line);
+  }
+  flushBlock();
+
+  if(imported){
+    saveState();
+    resultDiv.innerHTML=`
+      <div class="alert ok">✅ ${imported} transacción(es) BMSC importadas.</div>
+      ${autoCat?'<div class="alert ok">🏷️ '+autoCat+' categorizadas automáticamente.</div>':''}
+      ${pendientes?'<div class="alert warn">❓ '+pendientes+' necesitan revisión en Pendientes.</div>':''}
+      ${duplicadas?'<div class="alert warn">↩️ '+duplicadas+' ya existían y se omitieron.</div>':''}
+    `;
+    renderNav();
+  }else{
+    resultDiv.innerHTML='<div class="alert warn">📄 El PDF BMSC fue leído, pero no se encontraron movimientos con el patrón esperado.</div>';
+  }
+}
+
 function findHeaderRow(rows){
   for(let i=0;i<Math.min(rows.length,10);i++){
     const rowNorm = rows[i].map(c=>normalize(c));
