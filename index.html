@@ -80,6 +80,16 @@ h3.cat-title{font-size:0.95rem; margin:0 0 8px; display:flex; justify-content:sp
 .alert.danger{background:var(--red-soft); color:var(--red);}
 .alert.ok{background:var(--green-soft); color:var(--green);}
 table{width:100%; border-collapse:collapse; font-size:0.85rem;}
+/* NEXO: vista compacta de transacciones */
+#txListCard.tx-compact-mode .table-wrap table{font-size:.78rem;}
+#txListCard.tx-compact-mode .table-wrap th,
+#txListCard.tx-compact-mode .table-wrap td{padding:5px 6px;line-height:1.15;}
+#txListCard.tx-compact-mode .table-wrap th{font-size:.68rem;}
+#txListCard.tx-compact-mode .table-wrap .pill{padding:1px 7px;font-size:.66rem;}
+#txListCard.tx-compact-mode .table-wrap .row-actions{gap:4px;}
+#txListCard.tx-compact-mode .table-wrap .row-actions button{padding:2px 6px;font-size:.68rem;}
+#txListCard.tx-compact-mode .table-wrap tbody tr{height:30px;}
+
 .table-wrap{overflow-x:auto;}
 th,td{padding:8px 6px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap;}
 th{color:var(--muted); font-weight:600; font-size:0.75rem; text-transform:uppercase;}
@@ -1188,10 +1198,27 @@ function renderConfiguracion(app){
     </div><div class="nexo-config-col">
       <section class="nexo-config-card"><div class="nexo-config-card-head"><div class="nexo-config-card-icon">♙</div><div><h3>Perfil de usuario</h3><p>Tu información personal.</p></div></div><div class="nexo-profile"><div class="nexo-avatar">${initials}</div><strong>José Daniel</strong></div><div class="nexo-profile-row"><span>Correo electrónico</span><b>${email}</b><button class="nexo-edit" type="button">✎</button></div><div class="nexo-profile-row"><span>Zona horaria</span><b>(GMT-04:00) Santa Cruz</b><span>⌄</span></div></section>
       <section class="nexo-config-card"><div class="nexo-config-card-head"><div class="nexo-config-card-icon">⚙️</div><div><h3>Preferencias rápidas</h3><p>Ajustes comunes de la aplicación.</p></div></div><div class="nexo-pref-list">
-        <div class="nexo-pref"><span>Mostrar saldo en el resumen</span><button class="nexo-switch on" type="button"></button></div><div class="nexo-pref"><span>Recordatorios de presupuesto</span><button class="nexo-switch on" type="button"></button></div><div class="nexo-pref"><span>Notificaciones por pendientes</span><button class="nexo-switch on" type="button"></button></div><div class="nexo-pref"><span>Sugerencias de categorización</span><button class="nexo-switch on" type="button"></button></div><div class="nexo-pref"><span>Compactar tabla de transacciones</span><button class="nexo-switch" type="button"></button></div>
+        <div class="nexo-pref"><span>Mostrar saldo en el resumen</span><button class="nexo-switch on" type="button" data-pref-key="nexo-pref-balance"></button></div><div class="nexo-pref"><span>Recordatorios de presupuesto</span><button class="nexo-switch on" type="button" data-pref-key="nexo-pref-budget"></button></div><div class="nexo-pref"><span>Notificaciones por pendientes</span><button class="nexo-switch on" type="button" data-pref-key="nexo-pref-pending"></button></div><div class="nexo-pref"><span>Sugerencias de categorización</span><button class="nexo-switch on" type="button" data-pref-key="nexo-pref-suggest"></button></div><div class="nexo-pref"><span>Compactar tabla de transacciones</span><button class="nexo-switch" type="button" data-pref-key="nexo-pref-compact-tx" aria-label="Activar o desactivar tabla compacta"></button></div>
       </div></section>
     </div></div>`;
-  wrap.querySelectorAll('.nexo-switch').forEach(b=>b.addEventListener('click',()=>b.classList.toggle('on')));
+  wrap.querySelectorAll('.nexo-switch').forEach(b=>{
+    const key=b.dataset.prefKey;
+    if(key){
+      const saved=localStorage.getItem(key);
+      if(saved!==null) b.classList.toggle('on',saved==='true');
+    }
+    b.addEventListener('click',()=>{
+      b.classList.toggle('on');
+      if(key){
+        localStorage.setItem(key,b.classList.contains('on')?'true':'false');
+        if(key==='nexo-pref-compact-tx'){
+          const compact=b.classList.contains('on');
+          document.getElementById('txListCard')?.classList.toggle('tx-compact-mode',compact);
+          if(currentTab==='config') showToast(compact?'Vista compacta de transacciones activada.':'Vista compacta de transacciones desactivada.');
+        }
+      }
+    });
+  });
   wrap.querySelectorAll('.nexo-theme').forEach(b=>b.addEventListener('click',()=>{
     const pref=b.dataset.theme||'light';
     window.__nexoThemePreference=pref;
@@ -1574,6 +1601,7 @@ function renderTransacciones(app){
       mobileList.appendChild(item);
     });
     card.innerHTML=html;
+    card.classList.toggle('tx-compact-mode',localStorage.getItem('nexo-pref-compact-tx')==='true');
     card.appendChild(mobileList);
     const editHandler=id=>openEditTransaction(id);
     const deleteHandler=id=>{ const tx=state.transactions.find(t=>t.id===id); if(!tx) return; showDeleteTransactionModal(tx, async()=>{ const original=state.transactions.slice(); state.transactions=state.transactions.filter(t=>t.id!==tx.id); const result=await saveState(); if(!result.cloud){ state.transactions=original; throw (result.error||new Error('No se pudo sincronizar con Supabase')); } renderList(); renderNav(); showToast('Transacción eliminada y sincronizada.'); }); };
