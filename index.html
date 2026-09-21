@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NEXO FINANZAS</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";}</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
 <style>
@@ -2426,11 +2428,11 @@ function renderSubir(app){
   card.className = 'card';
   card.innerHTML = `
     <h3 class="cat-title">Subir extracto bancario</h3>
-    <p style="color:var(--muted);font-size:0.85rem;">Formato soportado: extracto BNB en Excel (.xls/.xlsx) o CSV. Sube el archivo tal como lo descargas de tu banco.</p>
+    <p style="color:var(--muted);font-size:0.85rem;">Formatos soportados: Excel (.xls/.xlsx), CSV y PDF. Sube el archivo tal como lo descargas de tu banco.</p>
     <div class="upload-drop" id="dropZone">
-      📂 Toca para elegir el archivo de tu extracto<br><span style="font-size:0.75rem;">.xlsx, .xls o .csv</span>
+      📂 Toca para elegir el archivo de tu extracto<br><span style="font-size:0.75rem;">.pdf, .xlsx, .xls o .csv</span>
     </div>
-    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden">
+    <input type="file" id="fileInput" accept=".pdf,.xlsx,.xls,.csv,application/pdf" class="hidden">
     <div id="uploadResult" style="margin-top:14px;"></div>
   `;
   wrap.appendChild(card);
@@ -2444,23 +2446,89 @@ function renderSubir(app){
   };
 }
 
-function handleFile(file){
-  const reader = new FileReader();
-  reader.onload = (e)=>{
-    try{
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, {type:'array', cellDates:false});
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
-      processBankRows(rows);
-    }catch(err){
-      document.getElementById('uploadResult').innerHTML = `<div class="alert danger">No se pudo leer el archivo: ${err.message}</div>`;
+async function handleFile(file){
+  const resultDiv = document.getElementById('uploadResult');
+  if(!file) return;
+
+  try{
+    if(file.type === 'application/pdf' || /\.pdf$/i.test(file.name)){
+      resultDiv.innerHTML = '<div class="alert">📄 Leyendo PDF…</div>';
+      await handlePdfFile(file);
+      return;
     }
-  };
-  reader.readAsArrayBuffer(file);
+
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      try{
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, {type:'array', cellDates:false});
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+        processBankRows(rows);
+      }catch(err){
+        resultDiv.innerHTML = `<div class="alert danger">No se pudo leer el archivo: ${err.message}</div>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }catch(err){
+    resultDiv.innerHTML = `<div class="alert danger">No se pudo leer el archivo: ${err.message}</div>`;
+  }
 }
 
+async function handlePdfFile(file){
+  const resultDiv = document.getElementById('uploadResult');
+  if(!window.pdfjsLib){
+    resultDiv.innerHTML = '<div class="alert danger">No se pudo cargar el lector PDF. Recarga la aplicación e inténtalo nuevamente.</div>';
+    return;
+  }
+
+  const buffer = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({data:buffer}).promise;
+  const lines = [];
+
+  for(let pageNo=1; pageNo<=pdf.numPages; pageNo++){
+    const page = await pdf.getPage(pageNo);
+    const content = await page.getTextContent();
+    const items = (content.items||[]).filter(item=>String(item.str||'').trim());
+    const grouped = [];
+
+    items.forEach(item=>{
+      const x = item.transform ? item.transform[4] : 0;
+      const y = item.transform ? item.transform[5] : 0;
+      let line = grouped.find(g=>Math.abs(g.y-y)<3);
+      if(!line){ line={y,items:[]}; grouped.push(line); }
+      line.items.push({x,text:String(item.str||'').trim()});
+    });
+
+    grouped.sort((a,b)=>b.y-a.y).forEach(g=>{
+      g.items.sort((a,b)=>a.x-b.x);
+      const text=g.items.map(i=>i.text).join(' ').replace(/\s+/g,' ').trim();
+      if(text) lines.push(text);
+    });
+  }
+
+  if(!lines.length){
+    resultDiv.innerHTML = '<div class="alert danger">El PDF no contiene texto seleccionable. Si es un PDF escaneado, necesitaremos OCR para poder leerlo.</div>';
+    return;
+  }
+
+  const rows = lines.map(line=>line.split(/\s{2,}|\t+/).map(v=>v.trim()).filter(Boolean));
+  const before = state.transactions.length;
+  processBankRows(rows);
+  const after = state.transactions.length;
+
+  if(after===before){
+    const preview=lines.slice(0,18).map(escapeHtml).join('<br>');
+    resultDiv.innerHTML = `
+      <div class="alert warn">📄 PDF leído correctamente, pero todavía no reconozco su estructura como extracto bancario. Podemos usar esta vista para ajustar el parser del banco.</div>
+      <div style="border:1px solid var(--border);border-radius:10px;padding:10px;font-size:.76rem;line-height:1.5;max-height:260px;overflow:auto;background:var(--bg);"><strong>Vista previa del texto extraído:</strong><br><br>${preview}</div>`;
+  }
+}
+
+function escapeHtml(value){
+  return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
 function findHeaderRow(rows){
   for(let i=0;i<Math.min(rows.length,10);i++){
     const rowNorm = rows[i].map(c=>normalize(c));
