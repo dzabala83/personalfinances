@@ -2542,7 +2542,7 @@ function processBmscPdfLines(lines){
   );
 
   function cleanDescription(parts){
-    const ignored = /^(?:MAKROBANX|PAGINA|FECHA(?: DESDE| HASTA)?|HORA|TRANSACCION|SUC|COD\\.?|DEP\\.?|NUM|COD\\.BCA\\.|DEBITOS|CREDITOS|SALDO|CUENTA(?: ANTERIOR)?|SUCURSAL CUENTA|EJECUTIVO|TELEFONO:?|E-MAIL|SALDO INICIAL|SALDO ANTERIOR|TOTAL DEBITOS|TOTAL CREDITOS|SALDO A LA FECHA|Saldo Anterior|Total Débitos|Total Créditos|Saldo Actual|Saldo Pignorado|Saldo Bloqueado|Saldo Disponible|Total ITF|Cheques Ajenos en Tránsito)/i;
+    const ignored = /^(?:MAKROBANX|PAGINA|FECHA(?: DESDE| HASTA)?|HORA|TRANSACCION|SUC|COD\.?|DEP\.?|NUM|COD\.BCA\.|DEBITOS|CREDITOS|SALDO|CUENTA(?: ANTERIOR)?|SUCURSAL CUENTA|EJECUTIVO|TELEFONO:?|E-MAIL|SALDO INICIAL|SALDO ANTERIOR|TOTAL DEBITOS|TOTAL CREDITOS|SALDO A LA FECHA|Saldo Anterior|Total Débitos|Total Créditos|Saldo Actual|Saldo Pignorado|Saldo Bloqueado|Saldo Disponible|Total ITF|Cheques Ajenos en Tránsito)/i;
     const out=[];
     for(const raw of parts){
       let s=String(raw||'').replace(/\u00ad/g,'').replace(/\ufffd/g,'').replace(/\s+/g,' ').trim();
@@ -2579,7 +2579,7 @@ function processBmscPdfLines(lines){
       sameLine=text.slice(datePos+10,codePos)
          .replace(/\b\d{2}:\d{2}\b/g,' ')
          .replace(/\b(?:LP|SC)\b/g,' ')
-        .replace(/\\s+/g,' ').trim();
+        .replace(/\s+/g,' ').trim();
     }
 
     const descParts=[...descriptionParts];
