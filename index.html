@@ -758,16 +758,17 @@ function buildSeedState(){
 let state=null;
 
 const LEGACY_OWNER_KEY='nexo_legacy_state_owner';
-function migrateLegacyLocalForCurrentUser(){
+function cleanupLegacyMigrationForCurrentUser(){
   const key=userStoreKey();
   if(!key||!currentUser)return;
   try{
-    const owner=localStorage.getItem(LEGACY_OWNER_KEY);
-    if(owner)return;
-    const legacy=localStorage.getItem(STORE_KEY_BASE);
-    if(legacy)localStorage.setItem(key,legacy);
-    localStorage.setItem(LEGACY_OWNER_KEY,currentUser.id);
-  }catch(e){console.warn('No se pudo preparar la caché local por usuario:',e);}
+    // Si una sesión de la primera versión recibió por error el estado legacy,
+    // eliminamos únicamente esa copia antes de volver a cargar datos.
+    if(localStorage.getItem(LEGACY_OWNER_KEY)===currentUser.id){
+      localStorage.removeItem(key);
+      localStorage.removeItem(LEGACY_OWNER_KEY);
+    }
+  }catch(e){console.warn('No se pudo limpiar la caché de migración:',e);}
 }
 function saveLocal(){
   const key=userStoreKey();
@@ -1043,7 +1044,7 @@ async function saveState(){
 }
 
 async function initApp(){
-  migrateLegacyLocalForCurrentUser();
+  cleanupLegacyMigrationForCurrentUser();
   const appEl=document.getElementById('app');
   appEl.innerHTML='<div class="card"><div class="empty">☁️ Conectando con tus datos…</div></div>';
   try{
