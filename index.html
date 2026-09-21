@@ -1495,7 +1495,7 @@ function renderDashboard(app){
   evolution.innerHTML='<div class="approved-panel-head"><h2>Evolución mensual</h2><select id="approvedRange" class="panel-action"><option>Últimos 6 meses</option></select></div><div class="approved-chart-wrap"><canvas id="approvedEvolutionChart"></canvas></div>';
   chartsGrid.appendChild(evolution);
   const catPanel=document.createElement('section');catPanel.className='approved-panel';
-  catPanel.innerHTML='<div class="approved-panel-head"><h2>Gastos por categoría</h2></div><div class="approved-donut-wrap"><canvas id="approvedCategoryChart"></canvas><div id="approvedCategoryLegend" class="approved-legend"></div>';
+  catPanel.innerHTML='<div class="approved-panel-head"><h2>Gastos por categoría</h2></div><div class="approved-donut-wrap"><canvas id="approvedCategoryChart"></canvas><div id="approvedCategoryLegend" class="approved-legend"></div></div>';
   chartsGrid.appendChild(catPanel);wrap.appendChild(chartsGrid);
 
   const bottom=document.createElement('div');bottom.className='approved-bottom-grid';
