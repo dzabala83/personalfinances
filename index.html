@@ -757,6 +757,18 @@ function buildSeedState(){
 
 let state=null;
 
+const LEGACY_OWNER_KEY='nexo_legacy_state_owner';
+function migrateLegacyLocalForCurrentUser(){
+  const key=userStoreKey();
+  if(!key||!currentUser)return;
+  try{
+    const owner=localStorage.getItem(LEGACY_OWNER_KEY);
+    if(owner)return;
+    const legacy=localStorage.getItem(STORE_KEY_BASE);
+    if(legacy)localStorage.setItem(key,legacy);
+    localStorage.setItem(LEGACY_OWNER_KEY,currentUser.id);
+  }catch(e){console.warn('No se pudo preparar la caché local por usuario:',e);}
+}
 function saveLocal(){
   const key=userStoreKey();
   if(!key || !state) return;
@@ -1031,6 +1043,7 @@ async function saveState(){
 }
 
 async function initApp(){
+  migrateLegacyLocalForCurrentUser();
   const appEl=document.getElementById('app');
   appEl.innerHTML='<div class="card"><div class="empty">☁️ Conectando con tus datos…</div></div>';
   try{
