@@ -326,6 +326,27 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
 .approved-panel-head{height:58px;padding:0 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #edf0f5}.approved-panel-head h2{margin:0;font-size:1.03rem;color:#102b67}
 .approved-panel-head .panel-action{border:1px solid #e1e7f0;background:#fff;border-radius:10px;height:36px;padding:0 12px;color:#536482;font-size:.76rem}.approved-chart-wrap{height:300px;padding:16px 18px 12px}.approved-chart-wrap canvas{max-height:none!important;height:100%!important}
 .approved-donut-wrap{height:300px;padding:10px 18px 14px;display:grid;grid-template-columns:1fr 1fr;gap:4px;align-items:center}.approved-donut-wrap canvas{max-height:230px!important}
+/* GASTOS POR CATEGORIA — barras con presupuesto debajo */
+.approved-category-bars{height:300px;padding:10px 18px 12px;display:flex;flex-direction:column;justify-content:center;gap:10px;overflow:hidden}
+.approved-category-row{display:grid;grid-template-columns:125px minmax(180px,1fr) 104px 42px;gap:10px;align-items:start;min-height:25px}
+.approved-category-name{font-size:.76rem;font-weight:700;color:#102b67;padding-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.approved-category-barbox{min-width:0}
+.approved-category-track{height:14px;border-radius:8px;background:#edf1f6;overflow:hidden}
+.approved-category-fill{height:100%;border-radius:8px}
+.approved-category-budget{font-size:.68rem;color:#6f7f99;margin-top:3px;white-space:nowrap}
+.approved-category-spent{text-align:right;font-size:.77rem;font-weight:800;color:#102b67;white-space:nowrap}
+.approved-category-pct{text-align:right;font-size:.76rem;font-weight:800;color:#163b78;white-space:nowrap;padding-top:1px}
+.approved-category-pct.over{color:#e23f4c}
+.approved-category-empty{padding:30px;text-align:center;color:#7b879d;font-size:.84rem}
+@media(max-width:600px){
+ .approved-category-bars{height:auto;padding:10px 12px 14px;gap:9px}
+ .approved-category-row{grid-template-columns:82px minmax(100px,1fr) 78px 32px;gap:7px;min-height:28px}
+ .approved-category-name{font-size:.68rem}
+ .approved-category-track{height:11px}
+ .approved-category-budget{font-size:.6rem}
+ .approved-category-spent{font-size:.68rem}
+ .approved-category-pct{font-size:.67rem}
+}
 .approved-legend{display:flex;flex-direction:column;gap:8px;font-size:.75rem}.approved-legend-row{display:grid;grid-template-columns:12px 1fr auto auto;gap:8px;align-items:center}.approved-legend-dot{width:10px;height:10px;border-radius:50%}.approved-legend-name{color:#1b376e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.approved-legend-amount{color:#1d376b;font-weight:650;white-space:nowrap}.approved-legend-pct{color:#7b879d;white-space:nowrap}
 .approved-bottom-grid{display:grid;grid-template-columns:1.25fr .85fr;gap:16px}.approved-table{width:100%;border-collapse:collapse;font-size:.78rem}.approved-table th,.approved-table td{padding:11px 16px;border-bottom:1px solid #edf0f5;white-space:nowrap}.approved-table th{font-size:.72rem;text-transform:none;color:#71809a;background:#fbfcfe;font-weight:600}.approved-table td{color:#233c70}.approved-table tr:last-child td{border-bottom:0}
 .approved-amount-gasto{color:#e23f4c!important;font-weight:750}.approved-amount-ingreso{color:#159466!important;font-weight:750}.approved-cat-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:12px;background:#eef3ff;color:#244986;font-weight:650}
@@ -1508,7 +1529,7 @@ function renderDashboard(app){
   evolution.innerHTML='<div class="approved-panel-head"><h2>Evolución mensual</h2><select id="approvedRange" class="panel-action"><option>Últimos 6 meses</option></select></div><div class="approved-chart-wrap"><canvas id="approvedEvolutionChart"></canvas></div>';
   chartsGrid.appendChild(evolution);
   const catPanel=document.createElement('section');catPanel.className='approved-panel';
-  catPanel.innerHTML='<div class="approved-panel-head"><h2>Gastos por categoría</h2></div><div class="approved-donut-wrap"><canvas id="approvedCategoryChart"></canvas><div id="approvedCategoryLegend" class="approved-legend"></div></div>';
+  catPanel.innerHTML='<div class="approved-panel-head"><h2>Gastos por categoría</h2><span style="font-size:.76rem;color:#7b879d">Gastado vs. presupuesto</span></div><div id="approvedCategoryBars" class="approved-category-bars"></div>';
   chartsGrid.appendChild(catPanel);wrap.appendChild(chartsGrid);
 
   const bottom=document.createElement('div');bottom.className='approved-bottom-grid';
@@ -1578,9 +1599,31 @@ function renderDashboard(app){
   setTimeout(()=>{
     const evo=document.getElementById('approvedEvolutionChart');
     if(evo)new Chart(evo,{type:'bar',data:{labels:months.map(k=>{const mo=Number(k.split('-')[1]);return monthNames[mo-1]||k;}),datasets:[{label:'Ingresos',data:evolutionIncome,backgroundColor:'#20ad78',borderRadius:5,barPercentage:.65,categoryPercentage:.68},{label:'Gastos',data:evolutionExpense,backgroundColor:'#ef646d',borderRadius:5,barPercentage:.65,categoryPercentage:.68}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top',align:'end',labels:{usePointStyle:true,boxWidth:8,color:'#50627f',font:{size:11}}}},scales:{x:{grid:{display:false},ticks:{color:'#7b879d'}},y:{beginAtZero:true,grid:{color:'#e8edf4'},ticks:{color:'#7b879d'}}}}});
-    const donut=document.getElementById('approvedCategoryChart');
-    if(donut&&catEntries.length)new Chart(donut,{type:'doughnut',data:{labels:catEntries.map(x=>x[0]),datasets:[{data:catEntries.map(x=>x[1]),backgroundColor:catEntries.map((_,i)=>palette[i%palette.length]),borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmtMoney(ctx.raw)}}}}});
-    const legend=document.getElementById('approvedCategoryLegend');if(legend){legend.innerHTML='';catEntries.slice(0,7).forEach(([name,value],i)=>{const row=document.createElement('div');row.className='approved-legend-row';const pct=totalCat?Math.round(value/totalCat*100):0;row.innerHTML='<span class="approved-legend-dot" style="background:'+palette[i%palette.length]+'"></span><span class="approved-legend-name">'+escapeHtml(name)+'</span><span class="approved-legend-amount">'+fmtMoney(value)+'</span><span class="approved-legend-pct">'+pct+'%</span>';legend.appendChild(row);});if(!catEntries.length)legend.innerHTML='<div class="approved-empty">Sin gastos registrados este mes.</div>';}
+      const categoryBars=document.getElementById('approvedCategoryBars');
+    if(categoryBars){
+      categoryBars.innerHTML='';
+      if(!catEntries.length){
+        categoryBars.innerHTML='<div class="approved-category-empty">Sin gastos registrados este mes.</div>';
+      }else{
+        const rows=catEntries.filter(([name])=>name).slice(0,8);
+        rows.forEach(([name,value],i)=>{
+          const catObj=gastoCats.find(c=>c.nombre===name);
+          const budget=Number(catObj?categoryBudget(catObj):0);
+          const pct=budget>0?Math.round(value/budget*100):null;
+          const width=budget>0?Math.min(value/budget*100,100):Math.min(value/(rows[0][1]||1)*100,100);
+          let fill=palette[i%palette.length];
+          if(budget>0 && value/budget>=1) fill='#ef646d';
+          else if(budget>0 && value/budget>=.9) fill='#f5b72f';
+          const row=document.createElement('div');row.className='approved-category-row';
+          row.innerHTML='<div class="approved-category-name">'+escapeHtml(name)+'</div>'+
+            '<div class="approved-category-barbox"><div class="approved-category-track"><div class="approved-category-fill" style="width:'+Math.max(width>0?2:0,width)+'%;background:'+fill+'"></div></div>'+
+            '<div class="approved-category-budget">'+(budget>0?'Presupuesto: '+fmtMoney(budget):'Sin presupuesto')+'</div></div>'+
+            '<div class="approved-category-spent">'+fmtMoney(value)+'</div>'+
+            '<div class="approved-category-pct '+(pct!==null&&pct>100?'over':'')+'">'+(pct===null?'—':pct+'%')+'</div>';
+          categoryBars.appendChild(row);
+        });
+      }
+    }
   },0);
 }
 /* ================= TRANSACCIONES ================= */
