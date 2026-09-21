@@ -1165,7 +1165,7 @@ function syncUserChrome(){
   if(!u)return;
   const name=(u.user_metadata?.display_name||u.user_metadata?.name||u.email?.split('@')[0]||'Usuario').trim();
   const pretty=name.charAt(0).toUpperCase()+name.slice(1);
-  const initials=pretty.split(/\\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'U';
+  const initials=pretty.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'U';
   const greeting=document.querySelector('.nexo-greeting h1');
   const userName=document.querySelector('.nexo-user-name');
   const avatar=document.querySelector('.nexo-avatar');
