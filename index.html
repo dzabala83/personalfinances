@@ -2538,91 +2538,161 @@ function escapeHtml(value){
 }
 function processBmscPdfLines(lines){
   const resultDiv = document.getElementById('uploadResult');
-  let imported=0, autoCat=0, pendientes=0, duplicadas=0;
+  let imported=0, autoCat=0, pendientes=0, duplicadas=0, invalidas=0;
+  let totalDebitos=0, totalCreditos=0;
   const existingRefs = new Set(state.transactions.map(t=>t.refId).filter(Boolean));
-  const txs=[];
-  let block=[];
+  const parsedRefs = new Set();
+  let pendingDescription=[];
 
-  function flushBlock(){
-    if(!block.length)return;
-    const joined=block.join(' ').replace(/\s+/g,' ').trim();
-    const dateMatch=joined.match(/(\\d{4}\/\\d{2}\/\\d{2})/);
-    if(!dateMatch){block=[];return;}
-    const rest=joined.slice(dateMatch.index + dateMatch[0].length).trim();
-    const moneyMatch=rest.match(/([\\d.,]+)\\s+([\\d.,]+)(?:\\s+([\\d.,]+))?\\s*$/);
-    const codeMatch=rest.match(/(\\d{3,6}-\\d{5,8})/);
-    if(!moneyMatch || !codeMatch){block=[];return;}
+  // BMSC imprime cada movimiento en una fila con:
+  // FECHA + (hora/transacción/sucursal) + COD.BCA. + DEBITO + CREDITO + SALDO.
+  // La descripción puede estar en una o varias líneas ANTES de esa fila.
+  const amountPattern = '[-+]?\\d{1,3}(?:[.,]\\d{3})*(?:[.,]\\d{1,2})?';
+  const rowRegex = new RegExp(
+    '(?<fecha>\\d{4}\\/\\d{2}\\/\\d{2})' +
+    '.*?' +
+    '(?<codigo>\\d{3,6}-\\d{4,8})\\s+' +
+    '(?<debito>'+amountPattern+')\\s+' +
+    '(?<credito>'+amountPattern+')' +
+    '(?:\\s+(?<saldo>'+amountPattern+'))?\\s*$'
+  );
 
-    const fecha=dateMatch[1].replace(/\//g,'-');
-    const debito=parseAmount(moneyMatch[1]);
-    const credito=parseAmount(moneyMatch[2]);
-    if(debito===0 && credito===0){block=[];return;}
-    const tipo=debito>0?'Gasto':'Ingreso';
+  function cleanDescription(parts){
+    const ignored = /^(?:MAKROBANX|PAGINA|FECHA(?: DESDE| HASTA)?|HORA|TRANSACCION|SUC|COD\\.?|DEP\\.?|NUM|COD\\.BCA\\.|DEBITOS|CREDITOS|SALDO|CUENTA(?: ANTERIOR)?|SUCURSAL CUENTA|EJECUTIVO|TELEFONO:?|E-MAIL|SALDO INICIAL|SALDO ANTERIOR|TOTAL DEBITOS|TOTAL CREDITOS|SALDO A LA FECHA|Saldo Anterior|Total Débitos|Total Créditos|Saldo Actual|Saldo Pignorado|Saldo Bloqueado|Saldo Disponible|Total ITF|Cheques Ajenos en Tránsito)/i;
+    const out=[];
+    for(const raw of parts){
+      let s=String(raw||'').replace(/\u00ad/g,'').replace(/\ufffd/g,'').replace(/\s+/g,' ').trim();
+      if(!s)continue;
+      if(ignored.test(s))continue;
+      if(/^\\d{4}\\/\\d{2}\\/\\d{2}\\s+SALDO INICIAL/i.test(s))continue;
+      if(/^\\d{4}\\/\\d{2}\\/\\d{2}\\s+\\d{2}:\\d{2}/.test(s))continue;
+      if(/^\\d{2}:\\d{2}\\s+[A-Z]{2}\\s+[\\d.,]+$/.test(s))continue;
+      // Evita arrastrar datos administrativos del encabezado.
+      if(/^\\d{8,}$/.test(s) || /^\\(591-/.test(s))continue;
+      out.push(s);
+    }
+    // Conservamos el orden, pero eliminamos repeticiones contiguas.
+    return out.filter((s,i)=>i===0 || s!==out[i-1]).join(' ').trim();
+  }
+
+  function parseOne(line, descriptionParts){
+    const text=String(line||'').replace(/\u00ad/g,'').replace(/\s+/g,' ').trim();
+    const m=text.match(rowRegex);
+    if(!m)return false;
+
+    const fecha=m.groups.fecha.replace(/\\/g,'-');
+    const codigo=m.groups.codigo;
+    const debito=parseAmount(m.groups.debito);
+    const credito=parseAmount(m.groups.credito);
+
+    // Un movimiento válido debe tener al menos uno de los dos importes.
+    if(debito===0 && credito===0){ invalidas++; return true; }
+
+    const datePos=text.indexOf(m.groups.fecha);
+    const codePos=text.indexOf(codigo,datePos+10);
+    let sameLine='';
+    if(datePos>=0 && codePos>datePos){
+      sameLine=text.slice(datePos+10,codePos)
+        .replace(/\\b\\d{2}:\\d{2}\\b/g,' ')
+        .replace(/\\b(?:LP|SC)\\b/g,' ')
+        .replace(/\\s+/g,' ').trim();
+    }
+
+    const descParts=[...descriptionParts];
+    if(sameLine)descParts.push(sameLine);
+    let desc=cleanDescription(descParts);
+    if(!desc){
+      // Para filas que vienen completamente en una sola línea, usa el tipo bancario.
+      const fallback = debito>0 ? 'Movimiento débito BMSC' : 'Movimiento crédito BMSC';
+      desc=fallback;
+    }
+
     const monto=debito>0?debito:credito;
-    let desc=joined.slice(dateMatch.index + dateMatch[0].length);
-    desc=desc.replace(codeMatch[0],'').replace(/([\\d.,]+\\s+){2,3}$/,'').trim();
+    const tipo=debito>0?'Gasto':'Ingreso';
+    const refId=codigo+'|'+fecha+'|'+monto;
 
-    // En el PDF BMSC la descripción suele estar antes de la fecha.
-    const beforeDate=joined.slice(0,dateMatch.index).trim();
-    const beforeClean=beforeDate.replace(/^\\d{2}:\\d{2}\\s+[A-Z]{2}\\s+[\\d.,]+\\s*/,'').trim();
-    if(beforeClean) desc=(beforeClean+' '+desc).trim();
-    desc=desc.replace(/\\s+/g,' ').trim();
-
-    const refId=codeMatch[0]+'|'+fecha+'|'+monto;
-    if(existingRefs.has(refId)){duplicadas++;block=[];return;}
-    existingRefs.add(refId);
+    if(existingRefs.has(refId) || parsedRefs.has(refId)){
+      duplicadas++;
+      return true;
+    }
+    parsedRefs.add(refId);
 
     const smart=matchRules(desc,tipo);
     const autoThreshold=85;
     const rule=smart&&smart.confidence>=autoThreshold?smart:null;
+
     state.transactions.push({
-      id:uid('tx'),fecha,descripcion:desc||'(sin descripción)',monto,tipo,
-      categoria:rule?rule.categoria:null,subcategoria:rule?rule.subcategoria:null,
-      cuenta:'BMSC',banco:'Banco Mercantil Santa Cruz',origen:'extracto',
-      estado:rule?'categorizado':'pendiente',confidence:smart?.confidence||0,
-      suggestedCategoria:smart?.categoria||null,suggestedSubcategoria:smart?.subcategoria||null,
-      suggestionSource:smart?.source||null,refId
+      id:uid('tx'),
+      fecha,
+      descripcion:desc,
+      monto,
+      tipo,
+      categoria:rule?rule.categoria:null,
+      subcategoria:rule?rule.subcategoria:null,
+      cuenta:'BMSC',
+      banco:'Banco Mercantil Santa Cruz',
+      origen:'extracto',
+      estado:rule?'categorizado':'pendiente',
+      confidence:smart?.confidence||0,
+      suggestedCategoria:smart?.categoria||null,
+      suggestedSubcategoria:smart?.subcategoria||null,
+      suggestionSource:smart?.source||null,
+      refId
     });
+
     imported++;
+    totalDebitos+=debito;
+    totalCreditos+=credito;
     if(rule)autoCat++;else pendientes++;
-    block=[];
+    return true;
   }
 
   for(const line0 of lines){
-    const line=String(line0||'').replace(/\\u00ad/g,'').trim();
+    const line=String(line0||'').replace(/\u00ad/g,'').trim();
     if(!line)continue;
-    if(/^FECHA\\s+HORA\\s+TRANSACCION/i.test(line))continue;
-    if(/^SALDO ANTERIOR|^TOTAL DEBITOS|^TOTAL CREDITOS|^SALDO A LA FECHA/i.test(line))continue;
 
-    // Una línea con fecha, código y débitos/créditos puede contener toda la operación.
-    if(/\\d{4}\/\\d{2}\/\\d{2}/.test(line) && /\\d{3,6}-\\d{5,8}/.test(line) && /\\d[\\d.,]*\\s+\\d[\\d.,]*/.test(line)){
-      block.push(line);
-      flushBlock();
+    // Si encontramos una fila transaccional, procesamos exactamente esa fila.
+    // No dependemos de que el PDF haya separado hora, descripción y fecha en líneas concretas.
+    if(parseOne(line,pendingDescription)){
+      pendingDescription=[];
       continue;
     }
 
-    // El PDF normalmente separa hora/saldo, descripción y luego fecha/código/importes.
-    if(/^\\d{2}:\\d{2}\\s+[A-Z]{2}\\s+[\\d.,]+$/.test(line)){
-      flushBlock();
-      block=[line];
-      continue;
-    }
-
-    if(block.length)block.push(line);
+    // Todo lo que no sea fila se conserva como posible descripción de la siguiente operación.
+    pendingDescription.push(line);
   }
-  flushBlock();
+
+  const money=(n)=>Number(n||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const expectedDebitos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL DEBITOS\\s+([\\d.,]+)/i);
+  const expectedCreditos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL CREDITOS\\s+([\\d.,]+)/i);
+  const pdfDebitos=expectedDebitos?parseAmount(expectedDebitos[1]):null;
+  const pdfCreditos=expectedCreditos?parseAmount(expectedCreditos[1]):null;
+  const totalsOk =
+    pdfDebitos!=null && pdfCreditos!=null &&
+    Math.abs(pdfDebitos-totalDebitos)<0.01 &&
+    Math.abs(pdfCreditos-totalCreditos)<0.01;
 
   if(imported){
     saveState();
     resultDiv.innerHTML=`
       <div class="alert ok">✅ ${imported} transacción(es) BMSC importadas.</div>
+      <div class="alert ok">💰 Débitos: Bs ${money(totalDebitos)} · Créditos: Bs ${money(totalCreditos)}</div>
       ${autoCat?'<div class="alert ok">🏷️ '+autoCat+' categorizadas automáticamente.</div>':''}
       ${pendientes?'<div class="alert warn">❓ '+pendientes+' necesitan revisión en Pendientes.</div>':''}
       ${duplicadas?'<div class="alert warn">↩️ '+duplicadas+' ya existían y se omitieron.</div>':''}
+      ${invalidas?'<div class="alert warn">⚠️ '+invalidas+' filas fueron ignoradas por no tener débito/crédito.</div>':''}
+      ${(pdfDebitos!=null&&pdfCreditos!=null)?(
+        totalsOk
+          ? '<div class="alert ok">🔎 Validación del extracto: los totales importados coinciden con los totales del PDF.</div>'
+          : '<div class="alert warn">🔎 El PDF contiene totales, pero no coinciden exactamente con lo importado. Revisaremos las filas que falten.</div>'
+      ):''}
     `;
     renderNav();
   }else{
-    resultDiv.innerHTML='<div class="alert warn">📄 El PDF BMSC fue leído, pero no se encontraron movimientos con el patrón esperado.</div>';
+    resultDiv.innerHTML=`
+      <div class="alert warn">📄 El PDF BMSC fue leído, pero no se encontraron movimientos con el patrón esperado.</div>
+      <div class="alert warn">Filas analizadas: ${lines.length} · Filas inválidas: ${invalidas}</div>
+    `;
   }
 }
 
