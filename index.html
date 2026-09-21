@@ -2564,11 +2564,11 @@ function processBmscPdfLines(lines){
       let s=String(raw||'').replace(/\u00ad/g,'').replace(/\ufffd/g,'').replace(/\s+/g,' ').trim();
       if(!s)continue;
       if(ignored.test(s))continue;
-      if(/^\\d{4}\\/\\d{2}\\/\\d{2}\\s+SALDO INICIAL/i.test(s))continue;
-      if(/^\\d{4}\\/\\d{2}\\/\\d{2}\\s+\\d{2}:\\d{2}/.test(s))continue;
-      if(/^\\d{2}:\\d{2}\\s+[A-Z]{2}\\s+[\\d.,]+$/.test(s))continue;
+      if(/^\d{4}\/\d{2}\/\d{2}\s+SALDO INICIAL/i.test(s))continue;
+      if(/^\d{4}\/\d{2}\/\d{2}\s+\d{2}:\d{2}/.test(s))continue;
+      if(/^\d{2}:\d{2}\s+[A-Z]{2}\s+[\d.,]+$/.test(s))continue;
       // Evita arrastrar datos administrativos del encabezado.
-      if(/^\\d{8,}$/.test(s) || /^\\(591-/.test(s))continue;
+      if(/^\d{8,}$/.test(s) || /^\(591-/.test(s))continue;
       out.push(s);
     }
     // Conservamos el orden, pero eliminamos repeticiones contiguas.
@@ -2580,7 +2580,7 @@ function processBmscPdfLines(lines){
     const m=text.match(rowRegex);
     if(!m)return false;
 
-    const fecha=m.groups.fecha.replace(/\\/g,'-');
+    const fecha=m.groups.fecha.replace(/\//g,'-');
     const codigo=m.groups.codigo;
     const debito=parseAmount(m.groups.debito);
     const credito=parseAmount(m.groups.credito);
@@ -2593,8 +2593,8 @@ function processBmscPdfLines(lines){
     let sameLine='';
     if(datePos>=0 && codePos>datePos){
       sameLine=text.slice(datePos+10,codePos)
-        .replace(/\\b\\d{2}:\\d{2}\\b/g,' ')
-        .replace(/\\b(?:LP|SC)\\b/g,' ')
+         .replace(/\b\d{2}:\d{2}\b/g,' ')
+         .replace(/\b(?:LP|SC)\b/g,' ')
         .replace(/\\s+/g,' ').trim();
     }
 
@@ -2663,8 +2663,8 @@ function processBmscPdfLines(lines){
   }
 
   const money=(n)=>Number(n||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const expectedDebitos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL DEBITOS\\s+([\\d.,]+)/i);
-  const expectedCreditos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL CREDITOS\\s+([\\d.,]+)/i);
+  const expectedDebitos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL DEBITOS\s+([\d.,]+)/i);
+  const expectedCreditos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL CREDITOS\s+([\d.,]+)/i);
   const pdfDebitos=expectedDebitos?parseAmount(expectedDebitos[1]):null;
   const pdfCreditos=expectedCreditos?parseAmount(expectedCreditos[1]):null;
   const totalsOk =
