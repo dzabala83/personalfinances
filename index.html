@@ -766,6 +766,13 @@ const authStorage={
 const supabaseClient=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:authStorage,experimental:{passkey:true}}});
 let currentUser = null;
 let cloudActive = false;
+let appInitialized = false;
+/*
+ * La existencia de datos NO determina si una cuenta ya fue inicializada.
+ * Una cuenta puede tener 0 registros válidamente después de "Borrar todos".
+ * Este estado vive en Supabase para que el comportamiento sea consistente
+ * entre dispositivos y sesiones.
+ */
 const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 let cloudSnapshot = null;
 
@@ -1108,17 +1115,33 @@ function loadLocal(){
 }
 
 async function loadFromSupabase(){
-  const [{data:cats,error:e1},{data:subs,error:e2},{data:rules,error:e3},{data:tx,error:e4},{data:budgets,error:e5}]=await Promise.all([
+  const [{data:cats,error:e1},{data:subs,error:e2},{data:rules,error:e3},{data:tx,error:e4},{data:budgets,error:e5},{data:appState,error:e6}]=await Promise.all([
     supabaseClient.from('categorias').select('*').order('created_at'),
     supabaseClient.from('subcategorias').select('*').order('created_at'),
     supabaseClient.from('reglas_categorizacion').select('*').order('created_at'),
     supabaseClient.from('transacciones').select('*').order('fecha',{ascending:false}),
-    supabaseClient.from('presupuestos').select('*').eq('mes',currentMonth+'-01')
+    supabaseClient.from('presupuestos').select('*').eq('mes',currentMonth+'-01'),
+    supabaseClient.from('usuario_config').select('datos_inicializados').eq('usuario_id',currentUser.id).maybeSingle()
   ]);
-  const err=[e1,e2,e3,e4,e5].find(Boolean);
+  const err=[e1,e2,e3,e4,e5,e6].find(Boolean);
   if(err) throw err;
+
+  /*
+   * Regla de inicialización:
+   * - Si existe usuario_config, ese flag manda.
+   * - Si hay datos pero el perfil todavía no existe (migración/compatibilidad),
+   *   consideramos la cuenta inicializada y creamos el registro después.
+   * - Si no hay datos y no existe el perfil, es una cuenta realmente nueva.
+   */
+  appInitialized=Boolean(appState?.datos_inicializados);
+  if(!appState && cats && cats.length>0) appInitialized=true;
+
   refreshEntityCache(cats||[],subs||[]);
-  if(!cats || cats.length===0) return null;
+
+  if(!cats || cats.length===0){
+    if(!appInitialized) return null;
+    return {categories:[],rules:[],transactions:[],seeded:false,seedImported:true};
+  }
   const subByCat={}; (subs||[]).forEach(s=>(subByCat[s.categoria_id]??=[]).push(s));
   const budgetByCat={}; (budgets||[]).forEach(b=>{
     if(!budgetByCat[b.categoria_id]) budgetByCat[b.categoria_id]={direct:0,subs:{}};
@@ -1132,6 +1155,17 @@ async function loadFromSupabase(){
   const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null}));
   const rules2=(rules||[]).map(r=>({id:r.id,keyword:r.palabra_clave,tipo:r.categoria_id&&catById[r.categoria_id]?catById[r.categoria_id].tipo:'Gasto',categoria:catById[r.categoria_id]?.nombre||'',subcategoria:r.subcategoria_id?subNameById[r.subcategoria_id]||null:null}));
   return {categories,rules:rules2,transactions,seeded:false,seedImported:true};
+}
+
+async function setAppInitialized(value=true){
+  if(!currentUser) return;
+  const {error}=await supabaseClient.from('usuario_config').upsert({
+    usuario_id:currentUser.id,
+    datos_inicializados:Boolean(value),
+    updated_at:new Date().toISOString()
+  },{onConflict:'usuario_id'});
+  if(error) throw new Error('usuario_config: '+error.message);
+  appInitialized=Boolean(value);
 }
 
 async function seedToSupabase(seed){
@@ -1187,6 +1221,7 @@ async function seedToSupabase(seed){
     cats.map(c=>({id:catIdByKey[c.tipo+'|'+c.nombre],tipo:c.tipo,nombre:c.nombre})),
     subRows
   );
+  await setAppInitialized(true);
   return seed;
 }
 async function auditSupabaseConnection(){
@@ -1398,7 +1433,17 @@ async function initApp(){
 
     // Primera entrada: mostrar la aplicación inmediatamente.
     const local=loadLocal();
-    state=local||buildSeedState();
+
+    /*
+     * IMPORTANTE: una cuenta inicializada puede estar completamente vacía.
+     * Solo usamos datos seed cuando Supabase confirmó que la cuenta es nueva.
+     * Nunca inferimos "cuenta nueva" simplemente porque haya 0 categorías.
+     */
+    if(!appInitialized){
+      state=local||buildSeedState();
+    }else{
+      state=local||{categories:[],transactions:[],rules:[],budgets:{}};
+    }
     migrateState(state);
     loadSyncQueue();
     hydrateStateFromSyncQueue();
@@ -3545,7 +3590,20 @@ function renderBackup(app){
         if(error) throw error;
       }
       state={categories:[],transactions:[],rules:[],budgets:{}};
+
+      // Invalidamos cualquier foto/cola anterior para que una recarga NO
+      // pueda reintroducir registros que el usuario acaba de eliminar.
+      cloudSnapshot={
+        transactions:[],
+        rules:[],
+        budgetSignature:JSON.stringify([])
+      };
+      refreshEntityCache([],[]);
+      clearSyncQueueForCurrentUser();
+      appInitialized=true;
+      await setAppInitialized(true);
       saveLocal();
+
       cloudActive=true;
       showToast('Todos los datos fueron eliminados');
       currentTab='dashboard';
