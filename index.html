@@ -1536,6 +1536,18 @@ const TABS = [
 function pendingCount(){
   return state.transactions.filter(t=>t.estado==='pendiente').length;
 }
+function refreshPendingNavBadge(){
+  const btn=document.querySelector('#tabNav button[data-tab="pendientes"]');
+  if(!btn)return;
+  btn.querySelector('.badge')?.remove();
+  const count=pendingCount();
+  if(count>0){
+    const badge=document.createElement('span');
+    badge.className='badge';
+    badge.textContent=count;
+    btn.appendChild(badge);
+  }
+}
 
 function renderNav(){
   const nav=document.getElementById('tabNav'); if(!nav)return;
@@ -1546,7 +1558,7 @@ function renderNav(){
   const icons={dashboard:'⌂',transacciones:'▤',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
   ['dashboard','transacciones','categorias','subir','pendientes'].forEach(id=>{
     const tab=TABS.find(x=>x.id===id); if(!tab)return;
-    const btn=document.createElement('button'); btn.className=tab.id===currentTab?'active':'';
+    const btn=document.createElement('button'); btn.dataset.tab=tab.id; btn.className=tab.id===currentTab?'active':'';
     const label=tab.label.replace(/^\S+\s*/,'');
     btn.innerHTML='<span class="nav-icon">'+(icons[id]||'•')+'</span><span class="nav-label">'+label+'</span>';
     if(id==='pendientes'&&pendingCount()>0)btn.innerHTML+='<span class="badge">'+pendingCount()+'</span>';
@@ -2276,7 +2288,8 @@ function renderPendientes(app){
         if(!remaining && !listWrap.querySelector('.pending-item')){
           listWrap.innerHTML='<div class="card"><div class="empty">No hay transacciones pendientes para estos filtros.</div></div>';
         }
-        renderNav();
+        refreshPendingNavBadge();
+        syncQueueStatus();
         showToast('✓ Categorizada. Sincronizando en segundo plano…');
       }else{
         btn.disabled=false;btn.textContent='Asignar';
