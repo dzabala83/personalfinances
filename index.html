@@ -794,6 +794,242 @@ function buildSeedState(){
 
 let state=null;
 
+/* ================= SYNC MANAGER V1 ================= */
+/*
+ * Arquitectura:
+ * UI -> state/localStorage -> cola persistente -> lote -> Supabase
+ *
+ * Objetivos:
+ * - La UI nunca espera a la red para completar una decisión.
+ * - Varias categorizaciones rápidas se agrupan en un solo lote.
+ * - La cola sobrevive recargas y pérdidas temporales de conexión.
+ * - Las operaciones son idempotentes mediante UUID + upsert.
+ */
+let cloudEntityCache={
+  categories:new Map(),       // "tipo|nombre" -> UUID
+  subcategories:new Map(),    // "categoriaUUID|nombre" -> UUID
+  ready:false
+};
+let pendingSyncQueue=[];
+let pendingSyncWorkerRunning=false;
+let pendingSyncRetryTimer=null;
+let pendingSyncRetryAttempt=0;
+
+function syncQueueKey(){
+  return currentUser?.id ? 'nexo_sync_queue_v1_'+currentUser.id : null;
+}
+function saveSyncQueue(){
+  const key=syncQueueKey();
+  if(!key)return;
+  try{localStorage.setItem(key,JSON.stringify(pendingSyncQueue));}catch(e){
+    console.warn('No se pudo persistir la cola de sincronización:',e);
+  }
+}
+function loadSyncQueue(){
+  const key=syncQueueKey();
+  pendingSyncQueue=[];
+  if(!key)return;
+  try{
+    const raw=localStorage.getItem(key);
+    const parsed=raw?JSON.parse(raw):[];
+    pendingSyncQueue=Array.isArray(parsed)?parsed:[];
+  }catch(e){pendingSyncQueue=[];}
+}
+function clearSyncQueueForCurrentUser(){
+  const key=syncQueueKey();
+  pendingSyncQueue=[];
+  pendingSyncRetryAttempt=0;
+  if(pendingSyncRetryTimer){clearTimeout(pendingSyncRetryTimer);pendingSyncRetryTimer=null;}
+  if(key){try{localStorage.removeItem(key);}catch(e){}}
+}
+function refreshEntityCache(cats=[],subs=[]){
+  cloudEntityCache={categories:new Map(),subcategories:new Map(),ready:true};
+  (cats||[]).forEach(c=>{
+    if(c?.id&&c?.tipo&&c?.nombre) cloudEntityCache.categories.set(c.tipo+'|'+c.nombre,c.id);
+  });
+  (subs||[]).forEach(s=>{
+    if(s?.id&&s?.categoria_id&&s?.nombre) cloudEntityCache.subcategories.set(s.categoria_id+'|'+s.nombre,s.id);
+  });
+}
+function cacheCategory(cat){
+  if(cat?.id&&cat?.tipo&&cat?.nombre) cloudEntityCache.categories.set(cat.tipo+'|'+cat.nombre,cat.id);
+}
+function cacheSubcategory(catId,name,id){
+  if(catId&&name&&id) cloudEntityCache.subcategories.set(catId+'|'+name,id);
+}
+function syncQueueStatus(){
+  const dot=document.getElementById('nexoSyncDot');
+  const sub=document.getElementById('headerSub');
+  const hasQueue=pendingSyncQueue.length>0;
+  if(dot) dot.classList.toggle('cloud',!!cloudActive&&!hasQueue);
+  if(sub){
+    if(hasQueue) sub.textContent=pendingSyncWorkerRunning?'Sincronizando…':'Cambios pendientes';
+    else sub.textContent=cloudActive?'Sincronizado':'Solo este dispositivo';
+  }
+}
+function scheduleSyncRetry(){
+  if(pendingSyncRetryTimer||!currentUser||!pendingSyncQueue.length)return;
+  const delay=Math.min(60000,2000*Math.pow(2,pendingSyncRetryAttempt));
+  pendingSyncRetryAttempt=Math.min(pendingSyncRetryAttempt+1,5);
+  pendingSyncRetryTimer=setTimeout(()=>{
+    pendingSyncRetryTimer=null;
+    syncPendingQueue();
+  },delay);
+}
+function enqueuePendingAssignment(tx,newRuleIds=[]){
+  if(!currentUser)return;
+  if(!UUID_RE.test(tx.id||'')) tx.id=crypto.randomUUID();
+
+  const cat=getCategory(tx.tipo,tx.categoria);
+  if(!cat) throw new Error('Categoría no encontrada.');
+  let catId=cloudEntityCache.categories.get(tx.tipo+'|'+tx.categoria);
+  if(!UUID_RE.test(catId||'')){
+    catId=UUID_RE.test(cat.id||'')?cat.id:crypto.randomUUID();
+    cat.id=catId;
+  }
+  cacheCategory({id:catId,tipo:cat.tipo,nombre:cat.nombre});
+
+  let subId=null;
+  if(tx.subcategoria){
+    const subKey=catId+'|'+tx.subcategoria;
+    subId=cloudEntityCache.subcategories.get(subKey)||null;
+    if(!UUID_RE.test(subId||'')){
+      subId=crypto.randomUUID();
+      cacheSubcategory(catId,tx.subcategoria,subId);
+    }
+  }
+
+  const rules=(state.rules||[])
+    .filter(r=>newRuleIds.includes(r.id))
+    .map(r=>{
+      if(!UUID_RE.test(r.id||'')) r.id=crypto.randomUUID();
+      return {
+        id:r.id,usuario_id:currentUser.id,palabra_clave:r.keyword,
+        categoria_id:catId,subcategoria_id:r.subcategoria?subId:null
+      };
+    });
+
+  const operation={
+    id:'sync_'+tx.id,
+    createdAt:new Date().toISOString(),
+    transaction:{
+      id:tx.id,fecha:tx.fecha,descripcion:tx.descripcion,monto:Number(tx.monto)||0,
+      tipo:tx.tipo,categoria_id:catId,subcategoria_id:subId,
+      cuenta:tx.cuenta||null,origen:tx.origen||null,estado:'categorizado',
+      referencia_id:tx.refId||null,metadata:{}
+    },
+    category:{
+      id:catId,usuario_id:currentUser.id,nombre:cat.nombre,tipo:cat.tipo
+    },
+    subcategory:tx.subcategoria?{
+      id:subId,usuario_id:currentUser.id,categoria_id:catId,nombre:tx.subcategoria
+    }:null,
+    rules
+  };
+
+  // Dedupe por transacción: si el usuario vuelve a asignar antes de que
+  // termine la red, conservamos únicamente la última decisión.
+  const idx=pendingSyncQueue.findIndex(x=>x.transaction?.id===tx.id);
+  if(idx>=0) pendingSyncQueue[idx]=operation;
+  else pendingSyncQueue.push(operation);
+  saveSyncQueue();
+  syncQueueStatus();
+  syncPendingQueue();
+}
+
+async function flushPendingSyncBatch(){
+  if(!currentUser||!pendingSyncQueue.length)return;
+  const batch=pendingSyncQueue.slice(0,25);
+  const user_id=currentUser.id;
+
+  const categories=new Map();
+  const subcategories=new Map();
+  const rules=new Map();
+  const transactions=new Map();
+
+  batch.forEach(op=>{
+    if(op.category) categories.set(op.category.id,op.category);
+    if(op.subcategory) subcategories.set(op.subcategory.id,op.subcategory);
+    (op.rules||[]).forEach(r=>rules.set(r.id,r));
+    if(op.transaction) transactions.set(op.transaction.id,{...op.transaction,usuario_id:user_id});
+  });
+
+  // Todas estas operaciones son idempotentes. Si el lote se reintenta,
+  // los mismos UUID no generan duplicados.
+  let r;
+  if(categories.size){
+    r=await supabaseClient.from('categorias').upsert([...categories.values()],{onConflict:'id'});
+    if(r.error)throw r.error;
+  }
+  if(subcategories.size){
+    r=await supabaseClient.from('subcategorias').upsert([...subcategories.values()],{onConflict:'id'});
+    if(r.error)throw r.error;
+  }
+  if(rules.size){
+    r=await supabaseClient.from('reglas_categorizacion').upsert([...rules.values()],{onConflict:'id'});
+    if(r.error)throw r.error;
+  }
+  if(transactions.size){
+    r=await supabaseClient.from('transacciones').upsert([...transactions.values()],{onConflict:'id'});
+    if(r.error)throw r.error;
+  }
+
+  // Solo retiramos del journal después de que todo el lote fue confirmado.
+  pendingSyncQueue.splice(0,batch.length);
+  saveSyncQueue();
+
+  cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};
+  for(const tx of transactions.values()){
+    const idx=cloudSnapshot.transactions.findIndex(x=>x.id===tx.id);
+    const localTx=state.transactions.find(x=>x.id===tx.id);
+    const snap=localTx?{...localTx}:{id:tx.id};
+    if(idx>=0)cloudSnapshot.transactions[idx]=snap;
+    else cloudSnapshot.transactions.push(snap);
+  }
+  for(const rule of rules.values()){
+    const idx=cloudSnapshot.rules.findIndex(x=>x.id===rule.id);
+    const localRule=(state.rules||[]).find(x=>x.id===rule.id);
+    const snap=localRule?{...localRule}:{id:rule.id,keyword:rule.palabra_clave};
+    if(idx>=0)cloudSnapshot.rules[idx]=snap;
+    else cloudSnapshot.rules.push(snap);
+  }
+  cloudActive=true;
+  pendingSyncRetryAttempt=0;
+  saveLocal();
+}
+
+async function syncPendingQueue(){
+  if(pendingSyncWorkerRunning||!currentUser||!pendingSyncQueue.length)return;
+  if(!navigator.onLine){syncQueueStatus();return;}
+  pendingSyncWorkerRunning=true;
+  syncQueueStatus();
+  try{
+    // Un pequeño debounce permite agrupar varios clics consecutivos.
+    await new Promise(resolve=>setTimeout(resolve,120));
+    while(currentUser&&navigator.onLine&&pendingSyncQueue.length){
+      await flushPendingSyncBatch();
+      syncQueueStatus();
+    }
+  }catch(error){
+    console.error('Error en Sync Manager:',error);
+    cloudActive=false;
+    syncQueueStatus();
+    scheduleSyncRetry();
+  }finally{
+    pendingSyncWorkerRunning=false;
+    syncQueueStatus();
+  }
+}
+window.__nexoSyncDiagnostics=()=>({
+  queued:pendingSyncQueue.length,
+  workerRunning:pendingSyncWorkerRunning,
+  retryAttempt:pendingSyncRetryAttempt,
+  online:navigator.onLine,
+  cloudActive,
+  userId:currentUser?.id||null
+});
+window.addEventListener('online',()=>syncPendingQueue());
+
 const LEGACY_OWNER_KEY='nexo_legacy_state_owner';
 function cleanupLegacyMigrationForCurrentUser(){
   const key=userStoreKey();
@@ -829,6 +1065,7 @@ async function loadFromSupabase(){
   ]);
   const err=[e1,e2,e3,e4,e5].find(Boolean);
   if(err) throw err;
+  refreshEntityCache(cats||[],subs||[]);
   if(!cats || cats.length===0) return null;
   const subByCat={}; (subs||[]).forEach(s=>(subByCat[s.categoria_id]??=[]).push(s));
   const budgetByCat={}; (budgets||[]).forEach(b=>{
@@ -894,6 +1131,10 @@ async function seedToSupabase(seed){
     r=await supabaseClient.from('transacciones').insert(txRows);
     if(r.error) throw new Error('transacciones: '+r.error.message);
   }
+  refreshEntityCache(
+    cats.map(c=>({id:catIdByKey[c.tipo+'|'+c.nombre],tipo:c.tipo,nombre:c.nombre})),
+    subRows
+  );
   return seed;
 }
 async function auditSupabaseConnection(){
@@ -1099,8 +1340,11 @@ async function initApp(){
       cloudActive=true;
       saveLocal();
       migrateState(state);
+      loadSyncQueue();
       finishInit();
       render();
+      syncQueueStatus();
+      syncPendingQueue();
       return;
     }
 
@@ -1108,9 +1352,11 @@ async function initApp(){
     const local=loadLocal();
     state=local||buildSeedState();
     migrateState(state);
+    loadSyncQueue();
     finishInit();
     render();
     cloudActive=false;
+    syncQueueStatus();
     renderNav();
 
     // La carga inicial a Supabase ocurre en segundo plano.
@@ -1128,7 +1374,10 @@ async function initApp(){
           saveLocal();
         }
         cloudActive=true;
+        loadSyncQueue();
         renderNav();
+        syncQueueStatus();
+        syncPendingQueue();
         showToast('Datos iniciales sincronizados ✓');
       }).catch(err=>{
         console.error('Error sincronizando datos iniciales:',err);
@@ -1882,98 +2131,17 @@ function openManualForm(){
   };
 }
 
-async function savePendingAssignment(tx, newRuleIds=[]){
-  // Guardado rápido: una asignación pendiente no necesita sincronizar
-  // toda la aplicación. Solo enviamos la transacción y las reglas nuevas.
+function savePendingAssignment(tx,newRuleIds=[]){
+  // La UI no espera a Supabase. El cambio queda en local y entra al journal
+  // persistente; Sync Manager lo agrupa y lo envía en segundo plano.
   saveLocal();
-  if(!currentUser) return {cloud:false};
-
+  if(!currentUser)return {cloud:false,queued:false};
   try{
-    const user_id=currentUser.id;
-    const cat=getCategory(tx.tipo,tx.categoria);
-    if(!cat) throw new Error('Categoría no encontrada.');
-
-    // Aseguramos que la categoría tenga UUID de Supabase.
-    let catId=cat.id;
-    if(!UUID_RE.test(catId||'')) catId=crypto.randomUUID();
-    cat.id=catId;
-
-    const catRow={
-      id:catId,usuario_id:user_id,nombre:cat.nombre,tipo:cat.tipo
-    };
-    let r=await supabaseClient.from('categorias').upsert([catRow],{onConflict:'id'});
-    if(r.error) throw r.error;
-
-    // Resolvemos la subcategoría solo si existe.
-    let subId=null;
-    if(tx.subcategoria){
-      const {data:sub,error:eSub}=await supabaseClient
-        .from('subcategorias')
-        .select('id')
-        .eq('usuario_id',user_id)
-        .eq('categoria_id',catId)
-        .eq('nombre',tx.subcategoria)
-        .limit(1)
-        .maybeSingle();
-      if(eSub) throw eSub;
-      subId=sub?.id||null;
-    }
-
-    // Guardamos únicamente las reglas creadas por esta decisión.
-    const rulesToSave=(state.rules||[]).filter(r=>newRuleIds.includes(r.id));
-    if(rulesToSave.length){
-      const ruleRows=rulesToSave.map(x=>({
-        id:UUID_RE.test(x.id||'')?x.id:crypto.randomUUID(),
-        usuario_id:user_id,
-        palabra_clave:x.keyword,
-        categoria_id:catId,
-        subcategoria_id:x.subcategoria ? subId : null
-      }));
-      rulesToSave.forEach((x,i)=>x.id=ruleRows[i].id);
-      r=await supabaseClient.from('reglas_categorizacion').upsert(ruleRows,{onConflict:'id'});
-      if(r.error) throw r.error;
-    }
-
-    // Una sola transacción modificada.
-    const txRow={
-      id:UUID_RE.test(tx.id||'')?tx.id:crypto.randomUUID(),
-      usuario_id:user_id,
-      fecha:tx.fecha,
-      descripcion:tx.descripcion,
-      monto:Number(tx.monto)||0,
-      tipo:tx.tipo,
-      categoria_id:catId,
-      subcategoria_id:subId,
-      cuenta:tx.cuenta||null,
-      origen:tx.origen||null,
-      estado:'categorizado',
-      referencia_id:tx.refId||null,
-      metadata:{}
-    };
-    tx.id=txRow.id;
-    r=await supabaseClient.from('transacciones').upsert([txRow],{onConflict:'id'});
-    if(r.error) throw r.error;
-
-    // Actualizamos la foto local de nube para que el siguiente guardado
-    // no vuelva a considerar esta transacción/regla como pendiente.
-    cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};
-    const txIndex=cloudSnapshot.transactions.findIndex(x=>x.id===tx.id);
-    const txCloud={...tx};
-    if(txIndex>=0) cloudSnapshot.transactions[txIndex]=txCloud;
-    else cloudSnapshot.transactions.push(txCloud);
-    for(const x of rulesToSave){
-      const idx=cloudSnapshot.rules.findIndex(r=>r.id===x.id);
-      if(idx>=0) cloudSnapshot.rules[idx]={...x};
-      else cloudSnapshot.rules.push({...x});
-    }
-
-    saveLocal();
-    cloudActive=true;
-    return {cloud:true};
+    enqueuePendingAssignment(tx,newRuleIds);
+    return {cloud:false,queued:true};
   }catch(error){
-    console.error('Error guardando categorización rápida:',error);
-    cloudActive=false;
-    return {cloud:false,error};
+    console.error('Error preparando categorización rápida:',error);
+    return {cloud:false,queued:false,error};
   }
 }
 
@@ -2029,7 +2197,7 @@ function renderPendientes(app){
     pend.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
     listWrap.innerHTML='';
     if(!pend.length){listWrap.innerHTML='<div class="card"><div class="empty">No hay transacciones pendientes para estos filtros.</div></div>';return;}
-    const info=document.createElement('div');info.className='card';info.innerHTML=`<b>${pend.length}</b> transacción(es) esperando una categoría. Asígnalas para que el sistema aprenda y las reconozca automáticamente la próxima vez.`;listWrap.appendChild(info);
+    const info=document.createElement('div');info.className='card pending-count-info';info.innerHTML=`<b>${pend.length}</b> transacción(es) esperando una categoría. Asígnalas para que el sistema aprenda y las reconozca automáticamente la próxima vez.`;listWrap.appendChild(info);
     pend.forEach(t=>{
       const gastoCats=state.categories.filter(c=>c.tipo==='Gasto'),incCats=state.categories.filter(c=>c.tipo==='Ingreso');
       const div=document.createElement('div');div.className='pending-item';div.innerHTML=`<div class="desc">${escapeHtml(t.descripcion)}</div><div class="meta">${escapeHtml(t.fecha||'')} · ${escapeHtml(t.cuenta||'')} · <b>${fmtMoney(t.monto)}</b> · <span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo)}</span></div><div class="inline-form"><div><select class="pTipo"><option value="Gasto" ${t.tipo==='Gasto'?'selected':''}>Gasto</option><option value="Ingreso" ${t.tipo==='Ingreso'?'selected':''}>Ingreso</option></select></div><div><select class="pCat"></select></div><div><select class="pSub"></select></div></div><div class="smart-suggestion" style="margin:8px 0;padding:8px 10px;border-radius:9px;background:var(--accent-soft);border:1px solid var(--border);">${t.suggestedCategoria?`💡 <b>Sugerencia:</b> ${escapeHtml(t.suggestedCategoria)}${t.suggestedSubcategoria?` / ${escapeHtml(t.suggestedSubcategoria)}`:""} · <b>${Number(t.confidence||0)}%</b>`:"🔎 Sin sugerencia con suficiente confianza"}</div><div class="inline-form" style="margin-top:8px;"><div><input type="text" class="pNewCat" placeholder="O escribe categoría nueva"></div><div><button class="btn" style="width:100%" data-assign="${t.id}">Asignar</button></div></div><label style="display:flex;align-items:center;gap:7px;margin-top:9px;font-size:.78rem;color:var(--muted);"><input type="checkbox" class="pLearn" checked> Aprender esta decisión para futuras transacciones similares</label>`;listWrap.appendChild(div);
@@ -2043,15 +2211,25 @@ function renderPendientes(app){
       t.confidence=100;t.suggestedCategoria=null;t.suggestedSubcategoria=null;t.suggestionSource='manual';
       if(div.querySelector('.pLearn')?.checked && window.learnCategorization) window.learnCategorization(t,true);
       const newRuleIds=(state.rules||[]).filter(r=>!rulesBefore.has(r.id)).map(r=>r.id);
-      btn.disabled=true;btn.textContent='Guardando…';
-      const result=await savePendingAssignment(t,newRuleIds);
-      if(result.cloud){
-        showToast('Transacción categorizada y guardada ✓');
-        render();
+      btn.disabled=true;btn.textContent='Guardado local · sincronizando…';
+      const result=savePendingAssignment(t,newRuleIds);
+      if(result.queued){
+        // Actualización incremental: no reconstruimos los 69/1000 cards.
+        // La transacción desaparece de la lista inmediatamente.
+        div.style.opacity='.55';
+        div.style.pointerEvents='none';
+        setTimeout(()=>div.remove(),80);
+        const remaining=state.transactions.filter(x=>x.estado==='pendiente').length;
+        const info=listWrap.querySelector('.pending-count-info');
+        if(info) info.innerHTML='<b>'+remaining+'</b> transacción(es) esperando una categoría. Asígnalas para que el sistema aprenda y las reconozca automáticamente la próxima vez.';
+        if(!remaining && !listWrap.querySelector('.pending-item')){
+          listWrap.innerHTML='<div class="card"><div class="empty">No hay transacciones pendientes para estos filtros.</div></div>';
+        }
+        renderNav();
+        showToast('✓ Categorizada. Sincronizando en segundo plano…');
       }else{
         btn.disabled=false;btn.textContent='Asignar';
-        showToast('Se guardó localmente; la nube tardó o no respondió.');
-        render();
+        showToast('No se pudo preparar la sincronización. El cambio quedó local.');
       }
       };
     });
@@ -3378,7 +3556,9 @@ document.getElementById('logoutBtn').onclick=async()=>{
     console.warn('Logout:',e);
   }
 
+  clearSyncQueueForCurrentUser();
   currentUser=null;
+  cloudEntityCache={categories:new Map(),subcategories:new Map(),ready:false};
   document.getElementById('app').innerHTML='';
   document.getElementById('tabNav').innerHTML='';
   document.getElementById('logoutBtn').style.display='none';
@@ -3406,6 +3586,7 @@ document.getElementById('logoutBtn').onclick=async()=>{
     document.getElementById('logoutBtn').style.display='inline-block';
     await initApp();
   } else {
+    loadSyncQueue();
     window.__nexoAuthLog?.('NO_INITIAL_SESSION');
     document.getElementById('authGate').style.display='flex';
   }
