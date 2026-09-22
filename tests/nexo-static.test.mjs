@@ -32,6 +32,19 @@ test('pending assignment is non-blocking and incremental',()=>{
   assert.match(handler,/refreshPendingNavBadge\(\)/);
 });
 
+test('BMSC parser handles repeated table headers page by page',()=>{
+  assert.match(html,/__NEXO_PDF_PAGE_BREAK__/);
+  const start=html.indexOf('function processBmscPdfLines(lines){');
+  const end=html.indexOf('\nfunction findHeaderRow',start);
+  assert.ok(start>=0 && end>start);
+  const block=html.slice(start,end);
+  assert.match(block,/const pageGroups=\[\]/);
+  assert.match(block,/line==='__NEXO_PDF_PAGE_BREAK__'/);
+  assert.match(block,/const tablePages=pageGroups\.map/);
+  assert.match(block,/for\(const tableLines of tablePages\)/);
+  assert.match(block,/const allTableLines=tablePages\.flat\(\)/);
+});
+
 test('BMSC parser only reads transactions after the table header',()=>{
   const start=html.indexOf('function processBmscPdfLines(lines){');
   const end=html.indexOf('\nfunction findHeaderRow',start);
