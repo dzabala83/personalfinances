@@ -1207,17 +1207,18 @@ async function saveState(){
     const user_id=currentUser.id;
 
     // --- Categorías y subcategorías ---
-    const {data:existingCats,error:eCats}=await supabaseClient
-      .from('categorias').select('id,tipo,nombre').eq('usuario_id',user_id);
-    if(eCats) throw eCats;
-
-    const catByKey=Object.fromEntries((existingCats||[]).map(c=>[c.tipo+'|'+c.nombre,c.id]));
+    // Usamos la caché de entidades cargada al iniciar sesión. Esto elimina
+    // los SELECT completos de categorías/subcategorías en cada guardado.
+    // Si una entidad es nueva, generamos su UUID y la enviamos por upsert.
+    const catByKey={};
     const catRows=[];
     for(const c of state.categories){
       const key=c.tipo+'|'+c.nombre;
-      const id=catByKey[key] || (UUID_RE.test(c.id||'') ? c.id : crypto.randomUUID());
+      let id=cloudEntityCache.categories.get(key);
+      if(!UUID_RE.test(id||'')) id=UUID_RE.test(c.id||'')?c.id:crypto.randomUUID();
       c.id=id;
       catByKey[key]=id;
+      cacheCategory({id,tipo:c.tipo,nombre:c.nombre});
       catRows.push({id,usuario_id:user_id,nombre:c.nombre,tipo:c.tipo});
     }
     if(catRows.length){
@@ -1225,22 +1226,16 @@ async function saveState(){
       if(r.error) throw r.error;
     }
 
-    const {data:existingSubs,error:eSubs}=await supabaseClient
-      .from('subcategorias').select('id,categoria_id,nombre').eq('usuario_id',user_id);
-    if(eSubs) throw eSubs;
-
     const subMap={};
-    const existingSubMap=Object.fromEntries(
-      (existingSubs||[]).map(x=>[x.categoria_id+'|'+x.nombre,x.id])
-    );
     const subRows=[];
     state.categories.forEach(c=>{
       const catId=catByKey[c.tipo+'|'+c.nombre];
       (c.subcategorias||[]).forEach(name=>{
         const key=catId+'|'+name;
-        const id=existingSubMap[key] || crypto.randomUUID();
+        let id=cloudEntityCache.subcategories.get(key);
+        if(!UUID_RE.test(id||'')) id=crypto.randomUUID();
         subMap[key]=id;
-        if(!existingSubMap[key]) existingSubMap[key]=id;
+        cacheSubcategory(catId,name,id);
         subRows.push({id,usuario_id:user_id,categoria_id:catId,nombre:name});
       });
     });
