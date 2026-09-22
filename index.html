@@ -2969,13 +2969,55 @@ async function handlePdfFile(file){
 function escapeHtml(value){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
-function processBmscPdfLines(lines){
+async function syncImportedTransactionsToCloud(transactions){
+  if(!currentUser || !transactions?.length) return {cloud:false,reason:'sin transacciones o sesión'};
+  try{
+    const user_id=currentUser.id;
+    const catRows=[], catIds=new Map();
+    for(const tx of transactions){
+      if(!tx.categoria) continue;
+      const key=tx.tipo+'|'+tx.categoria;
+      if(catIds.has(key)) continue;
+      let id=cloudEntityCache.categories.get(key);
+      const cat=getCategory(tx.tipo,tx.categoria);
+      if(!cat) continue;
+      if(!UUID_RE.test(id||'')) id=UUID_RE.test(cat.id||'')?cat.id:crypto.randomUUID();
+      cat.id=id; cacheCategory({id,tipo:cat.tipo,nombre:cat.nombre}); catIds.set(key,id);
+      catRows.push({id,usuario_id,nombre:cat.nombre,tipo:cat.tipo});
+    }
+    if(catRows.length){ const {error}=await supabaseClient.from('categorias').upsert(catRows,{onConflict:'id'}); if(error) throw new Error('categorías: '+error.message); }
+    const subRows=[], subIds=new Map();
+    for(const tx of transactions){
+      if(!tx.subcategoria || !tx.categoria) continue;
+      const catId=catIds.get(tx.tipo+'|'+tx.categoria)||cloudEntityCache.categories.get(tx.tipo+'|'+tx.categoria);
+      if(!UUID_RE.test(catId||'')) continue;
+      const key=catId+'|'+tx.subcategoria; if(subIds.has(key)) continue;
+      let id=cloudEntityCache.subcategories.get(key);
+      const cat=getCategory(tx.tipo,tx.categoria); if(!cat?.subcategorias?.includes(tx.subcategoria)) continue;
+      if(!UUID_RE.test(id||'')) id=crypto.randomUUID();
+      cacheSubcategory(catId,tx.subcategoria,id); subIds.set(key,id);
+      subRows.push({id,usuario_id,categoria_id:catId,nombre:tx.subcategoria});
+    }
+    if(subRows.length){ const {error}=await supabaseClient.from('subcategorias').upsert(subRows,{onConflict:'id'}); if(error) throw new Error('subcategorías: '+error.message); }
+    const txRows=transactions.map(tx=>{
+      const catId=tx.categoria?(catIds.get(tx.tipo+'|'+tx.categoria)||cloudEntityCache.categories.get(tx.tipo+'|'+tx.categoria)||null):null;
+      const subId=tx.subcategoria&&catId?(subIds.get(catId+'|'+tx.subcategoria)||cloudEntityCache.subcategories.get(catId+'|'+tx.subcategoria)||null):null;
+      return {id:UUID_RE.test(tx.id||'')?tx.id:crypto.randomUUID(),usuario_id:user_id,fecha:tx.fecha,descripcion:tx.descripcion,monto:Number(tx.monto)||0,tipo:tx.tipo,categoria_id:catId,subcategoria_id:subId,cuenta:tx.cuenta||null,origen:tx.origen||null,estado:tx.estado||'categorizado',referencia_id:tx.refId||null,metadata:{}};
+    });
+    const {error}=await supabaseClient.from('transacciones').upsert(txRows,{onConflict:'id'});
+    if(error) throw new Error('transacciones: '+error.message);
+    cloudActive=true; cloudSnapshot={...(cloudSnapshot||{}),transactions:(state.transactions||[]).map(t=>({...t}))}; saveLocal();
+    return {cloud:true,count:txRows.length};
+  }catch(error){ console.error('Error sincronizando importación BMSC:',error); cloudActive=false; return {cloud:false,error}; }
+}
+async function processBmscPdfLines(lines){
   const resultDiv = document.getElementById('uploadResult');
   let imported=0, autoCat=0, pendientes=0, duplicadas=0, invalidas=0;
   let totalDebitos=0, totalCreditos=0;
   const existingRefs = new Set(state.transactions.map(t=>t.refId).filter(Boolean));
   const parsedRefs = new Set();
   let pendingDescription=[];
+  const importedTransactions=[];
 
   // IMPORTANTE BMSC: procesamos cada página de forma independiente.
   // El encabezado se repite en las 3 páginas del extracto. Así evitamos
@@ -3088,7 +3130,7 @@ function processBmscPdfLines(lines){
     const autoThreshold=85;
     const rule=smart&&smart.confidence>=autoThreshold?smart:null;
 
-    state.transactions.push({
+    const importedTx={
       id:uid('tx'),
       fecha,
       descripcion:desc,
@@ -3105,7 +3147,9 @@ function processBmscPdfLines(lines){
       suggestedSubcategoria:smart?.subcategoria||null,
       suggestionSource:smart?.source||null,
       refId
-    });
+    };
+    state.transactions.push(importedTx);
+    importedTransactions.push(importedTx);
 
     imported++;
     totalDebitos+=debito;
@@ -3153,7 +3197,7 @@ function processBmscPdfLines(lines){
     Math.abs(pdfCreditos-totalCreditos)<0.01;
 
   if(imported){
-    saveState();
+    saveLocal();
     resultDiv.innerHTML=`
       <div class="alert ok">✅ ${imported} transacción(es) BMSC importadas.</div>
       <div class="alert ok">💰 Débitos: Bs ${money(totalDebitos)} · Créditos: Bs ${money(totalCreditos)}</div>
@@ -3167,6 +3211,13 @@ function processBmscPdfLines(lines){
           : '<div class="alert warn">🔎 El PDF contiene totales, pero no coinciden exactamente con lo importado. Revisaremos las filas que falten.</div>'
       ):''}
     `;
+    const syncResult=await syncImportedTransactionsToCloud(importedTransactions);
+    if(syncResult.cloud){
+      resultDiv.innerHTML += '<div class="alert ok">☁️ Guardado en la nube: '+syncResult.count+' transacción(es).</div>';
+    }else{
+      resultDiv.innerHTML += '<div class="alert danger">⚠️ No se pudo sincronizar con la nube. El extracto queda solo localmente hasta resolver la conexión.</div>';
+      console.error('Detalle de sincronización BMSC:',syncResult.error);
+    }
     renderNav();
   }else{
     resultDiv.innerHTML=`
