@@ -32,6 +32,14 @@ test('pending assignment is non-blocking and incremental',()=>{
   assert.match(handler,/refreshPendingNavBadge\(\)/);
 });
 
+test('BMSC import persists transactions through a dedicated cloud sync',()=>{
+  assert.match(html,/async function syncImportedTransactionsToCloud\(transactions\)/);
+  assert.match(html,/await supabaseClient\.from\('transacciones'\)\.upsert\(txRows/);
+  assert.match(html,/async function processBmscPdfLines\(lines\)/);
+  assert.match(html,/const syncResult=await syncImportedTransactionsToCloud\(importedTransactions\)/);
+  assert.match(html,/Guardado en la nube/);
+});
+
 test('BMSC parser handles repeated table headers page by page',()=>{
   assert.match(html,/__NEXO_PDF_PAGE_BREAK__/);
   const start=html.indexOf('function processBmscPdfLines(lines){');
