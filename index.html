@@ -3583,12 +3583,14 @@ function renderBackup(app){
     btn.disabled=true;
     btn.textContent='Borrando…';
     try{
-      // Orden seguro respetando las relaciones: primero tablas hijas y luego categorías.
-      const tables=['presupuestos','reglas_categorizacion','transacciones','subcategorias','categorias'];
-      for(const table of tables){
-        const {error}=await supabaseClient.from(table).delete().eq('usuario_id',currentUser.id);
-        if(error) throw error;
-      }
+      /*
+       * El borrado completo se ejecuta como una única transacción en Postgres.
+       * Así evitamos estados parciales si una de las tablas falla a mitad del
+       * proceso y dejamos la cuenta marcada como inicializada aunque quede vacía.
+       */
+      const {error:resetError}=await supabaseClient.rpc('reset_my_finanzas');
+      if(resetError) throw resetError;
+
       state={categories:[],transactions:[],rules:[],budgets:{}};
 
       // Invalidamos cualquier foto/cola anterior para que una recarga NO
