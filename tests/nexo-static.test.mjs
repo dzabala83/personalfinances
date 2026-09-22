@@ -14,7 +14,7 @@ test('all inline JavaScript blocks compile',()=>{
 
 test('Sync Manager has persistent per-user queue and bounded batches',()=>{
   assert.match(html,/SYNC MANAGER V1/);
-  assert.match(html,/nexo_sync_queue_v1_\'+currentUser\.id/);
+  assert.ok(html.includes("nexo_sync_queue_v1_'+currentUser.id"));
   assert.match(html,/pendingSyncQueue\.slice\(0,25\)/);
   assert.match(html,/scheduleSyncRetry/);
   assert.match(html,/hydrateStateFromSyncQueue/);
