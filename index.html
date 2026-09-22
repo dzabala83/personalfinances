@@ -3097,6 +3097,15 @@ function processBmscPdfLines(lines){
     const line=String(line0||'').replace(/\u00ad/g,'').trim();
     if(!line)continue;
 
+    // El encabezado puede repetirse al comenzar una nueva página del PDF.
+    // Nunca debe convertirse en parte de la descripción de una transacción.
+    const lineNorm=normalize(line);
+    if(lineNorm.includes('fecha') && lineNorm.includes('transaccion') &&
+       lineNorm.includes('debito') && lineNorm.includes('credito') && lineNorm.includes('saldo')){
+      pendingDescription=[];
+      continue;
+    }
+
     // "SALDO INICIAL" pertenece a la tabla, pero no es una transacción.
     // No debe contaminar la descripción del primer movimiento.
     if(/^(?:\d{4}\/\d{2}\/\d{2}\s+)?SALDO INICIAL\b/i.test(line)){
