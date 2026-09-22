@@ -1438,6 +1438,8 @@ async function initApp(){
     } else {
       saveState().then(result=>{
         if(result?.cloud){ cloudActive=true; renderNav(); }
+        syncQueueStatus();
+        syncPendingQueue();
       });
     }
   }catch(e){
