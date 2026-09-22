@@ -32,6 +32,18 @@ test('pending assignment is non-blocking and incremental',()=>{
   assert.match(handler,/refreshPendingNavBadge\(\)/);
 });
 
+test('pending assignment allows category without subcategory and still queues',()=>{
+  const start=html.indexOf("div.querySelector('[data-assign]').onclick=async()=>");
+  const end=html.indexOf('\n      };',start);
+  assert.ok(start>=0 && end>start);
+  const handler=html.slice(start,end);
+  assert.match(handler,/const sub=subSel\.value \? subSel\.value\.trim\(\) : null/);
+  assert.match(handler,/t\.subcategoria=sub\|\|null/);
+  assert.match(handler,/savePendingAssignment\(t,newRuleIds\)/);
+  assert.match(html,/Subcategoría \(opcional\)/);
+  assert.match(html,/if\(tx\.subcategoria\)\{/);
+});
+
 test('state sync uses entity cache instead of full category/subcategory SELECTs',()=>{
   const start=html.indexOf('async function saveState(){');
   const end=html.indexOf('\nasync function initApp(){',start);
