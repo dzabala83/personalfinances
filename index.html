@@ -2972,6 +2972,24 @@ function processBmscPdfLines(lines){
   const parsedRefs = new Set();
   let pendingDescription=[];
 
+  // IMPORTANTE BMSC: el PDF contiene datos administrativos antes de la tabla
+  // (titular, dirección, teléfono, cuenta, sucursal, etc.). Solo desde el
+  // encabezado de la tabla FECHA/HORA/TRANSACCION/.../DEBITOS/CREDITOS/SALDO
+  // consideramos líneas como posibles movimientos o descripciones.
+  const tableHeaderIndex = lines.findIndex(line=>{
+    const n=normalize(String(line||''));
+    return n.includes('fecha') &&
+           n.includes('transaccion') &&
+           n.includes('debito') &&
+           n.includes('credito') &&
+           n.includes('saldo');
+  });
+  if(tableHeaderIndex<0){
+    resultDiv.innerHTML='<div class="alert warn">📄 No se encontró la tabla de movimientos BMSC. El extracto no fue importado para evitar tomar datos del encabezado como transacciones.</div>';
+    return;
+  }
+  const tableLines=lines.slice(tableHeaderIndex+1);
+
   // BMSC imprime cada movimiento en una fila con:
   // FECHA + (hora/transacción/sucursal) + COD.BCA. + DEBITO + CREDITO + SALDO.
   // La descripción puede estar en una o varias líneas ANTES de esa fila.
@@ -3075,9 +3093,16 @@ function processBmscPdfLines(lines){
     return true;
   }
 
-  for(const line0 of lines){
+  for(const line0 of tableLines){
     const line=String(line0||'').replace(/\u00ad/g,'').trim();
     if(!line)continue;
+
+    // "SALDO INICIAL" pertenece a la tabla, pero no es una transacción.
+    // No debe contaminar la descripción del primer movimiento.
+    if(/^(?:\d{4}\/\d{2}\/\d{2}\s+)?SALDO INICIAL\b/i.test(line)){
+      pendingDescription=[];
+      continue;
+    }
 
     // Si encontramos una fila transaccional, procesamos exactamente esa fila.
     // No dependemos de que el PDF haya separado hora, descripción y fecha en líneas concretas.
@@ -3086,13 +3111,14 @@ function processBmscPdfLines(lines){
       continue;
     }
 
-    // Todo lo que no sea fila se conserva como posible descripción de la siguiente operación.
+    // Solo dentro de la tabla, las líneas que no son fila se conservan como
+    // posible descripción de la siguiente operación.
     pendingDescription.push(line);
   }
 
   const money=(n)=>Number(n||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const expectedDebitos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL DEBITOS\s+([\d.,]+)/i);
-  const expectedCreditos = [...lines].map(x=>String(x)).join(' ').match(/TOTAL CREDITOS\s+([\d.,]+)/i);
+  const expectedDebitos = [...tableLines].map(x=>String(x)).join(' ').match(/TOTAL DEBITOS\s+([\d.,]+)/i);
+  const expectedCreditos = [...tableLines].map(x=>String(x)).join(' ').match(/TOTAL CREDITOS\s+([\d.,]+)/i);
   const pdfDebitos=expectedDebitos?parseAmount(expectedDebitos[1]):null;
   const pdfCreditos=expectedCreditos?parseAmount(expectedCreditos[1]):null;
   const totalsOk =
