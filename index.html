@@ -835,6 +835,58 @@ function loadSyncQueue(){
     pendingSyncQueue=Array.isArray(parsed)?parsed:[];
   }catch(e){pendingSyncQueue=[];}
 }
+function hydrateStateFromSyncQueue(){
+  if(!state||!pendingSyncQueue.length)return;
+  const txById=new Map((state.transactions||[]).map(t=>[t.id,t]));
+  const ruleById=new Map((state.rules||[]).map(r=>[r.id,r]));
+
+  for(const op of pendingSyncQueue){
+    const c=op.category;
+    if(c){
+      let cat=getCategory(c.tipo,c.nombre);
+      if(!cat){
+        cat={id:c.id,tipo:c.tipo,nombre:c.nombre,subcategorias:[],presupuesto:0,subPresupuestos:{}};
+        state.categories.push(cat);
+      }else if(!UUID_RE.test(cat.id||'')){
+        cat.id=c.id;
+      }
+      if(op.subcategory){
+        if(!cat.subcategorias.includes(op.subcategory.nombre)) cat.subcategorias.push(op.subcategory.nombre);
+        if(!cat.subPresupuestos)cat.subPresupuestos={};
+      }
+    }
+    const qtx=op.transaction;
+    if(qtx){
+      let tx=txById.get(qtx.id);
+      const catName=c?.nombre||tx?.categoria||'';
+      const subName=op.subcategory?.nombre||null;
+      if(!tx){
+        tx={
+          id:qtx.id,fecha:qtx.fecha,descripcion:qtx.descripcion,monto:Number(qtx.monto)||0,
+          tipo:qtx.tipo,categoria:catName,subcategoria:subName,cuenta:qtx.cuenta||null,
+          origen:qtx.origen||null,estado:'categorizado',refId:qtx.referencia_id||null
+        };
+        state.transactions.push(tx);
+        txById.set(tx.id,tx);
+      }else{
+        Object.assign(tx,{
+          fecha:qtx.fecha,descripcion:qtx.descripcion,monto:Number(qtx.monto)||0,
+          tipo:qtx.tipo,categoria:catName,subcategoria:subName,cuenta:qtx.cuenta||null,
+          origen:qtx.origen||null,estado:'categorizado',refId:qtx.referencia_id||tx.refId||null
+        });
+      }
+    }
+    (op.rules||[]).forEach(r=>{
+      if(!r?.id||ruleById.has(r.id))return;
+      state.rules.push({
+        id:r.id,keyword:r.palabra_clave,tipo:c?.tipo||'Gasto',
+        categoria:c?.nombre||'',subcategoria:op.subcategory?.nombre||null
+      });
+      ruleById.set(r.id,state.rules[state.rules.length-1]);
+    });
+  }
+  saveLocal();
+}
 function clearSyncQueueForCurrentUser(){
   const key=syncQueueKey();
   pendingSyncQueue=[];
@@ -1341,6 +1393,7 @@ async function initApp(){
       saveLocal();
       migrateState(state);
       loadSyncQueue();
+      hydrateStateFromSyncQueue();
       finishInit();
       render();
       syncQueueStatus();
@@ -1353,6 +1406,7 @@ async function initApp(){
     state=local||buildSeedState();
     migrateState(state);
     loadSyncQueue();
+    hydrateStateFromSyncQueue();
     finishInit();
     render();
     cloudActive=false;
@@ -1375,6 +1429,7 @@ async function initApp(){
         }
         cloudActive=true;
         loadSyncQueue();
+        hydrateStateFromSyncQueue();
         renderNav();
         syncQueueStatus();
         syncPendingQueue();
@@ -2138,6 +2193,7 @@ function savePendingAssignment(tx,newRuleIds=[]){
   if(!currentUser)return {cloud:false,queued:false};
   try{
     enqueuePendingAssignment(tx,newRuleIds);
+    saveLocal();
     return {cloud:false,queued:true};
   }catch(error){
     console.error('Error preparando categorización rápida:',error);
