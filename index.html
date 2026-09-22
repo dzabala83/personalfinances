@@ -2934,7 +2934,12 @@ async function handlePdfFile(file){
       const text=g.items.map(i=>i.text).join(' ').replace(/\s+/g,' ').trim();
       if(text) lines.push(text);
     });
+    // Conservamos el límite de página para que los parsers bancarios puedan
+    // detectar encabezados repetidos y no mezclar contexto entre páginas.
+    lines.push('__NEXO_PDF_PAGE_BREAK__');
   }
+
+  if(lines.length) lines.pop();
 
   if(!lines.length){
     resultDiv.innerHTML = '<div class="alert danger">El PDF no contiene texto seleccionable. Si es un PDF escaneado, necesitaremos OCR para poder leerlo.</div>';
@@ -2972,23 +2977,39 @@ function processBmscPdfLines(lines){
   const parsedRefs = new Set();
   let pendingDescription=[];
 
-  // IMPORTANTE BMSC: el PDF contiene datos administrativos antes de la tabla
-  // (titular, dirección, teléfono, cuenta, sucursal, etc.). Solo desde el
-  // encabezado de la tabla FECHA/HORA/TRANSACCION/.../DEBITOS/CREDITOS/SALDO
-  // consideramos líneas como posibles movimientos o descripciones.
-  const tableHeaderIndex = lines.findIndex(line=>{
+  // IMPORTANTE BMSC: procesamos cada página de forma independiente.
+  // El encabezado se repite en las 3 páginas del extracto. Así evitamos
+  // tomar solo la última página o arrastrar datos administrativos entre páginas.
+  const pageGroups=[];
+  let currentPage=[];
+  for(const line of lines){
+    if(line==='__NEXO_PDF_PAGE_BREAK__'){
+      pageGroups.push(currentPage);
+      currentPage=[];
+    }else{
+      currentPage.push(line);
+    }
+  }
+  if(currentPage.length)pageGroups.push(currentPage);
+
+  const isTableHeader=(line)=>{
     const n=normalize(String(line||''));
     return n.includes('fecha') &&
            n.includes('transaccion') &&
            n.includes('debito') &&
            n.includes('credito') &&
            n.includes('saldo');
-  });
-  if(tableHeaderIndex<0){
+  };
+
+  const tablePages=pageGroups.map(pageLines=>{
+    const headerIndex=pageLines.findIndex(isTableHeader);
+    return headerIndex>=0 ? pageLines.slice(headerIndex+1) : [];
+  }).filter(pageLines=>pageLines.length);
+
+  if(!tablePages.length){
     resultDiv.innerHTML='<div class="alert warn">📄 No se encontró la tabla de movimientos BMSC. El extracto no fue importado para evitar tomar datos del encabezado como transacciones.</div>';
     return;
   }
-  const tableLines=lines.slice(tableHeaderIndex+1);
 
   // BMSC imprime cada movimiento en una fila con:
   // FECHA + (hora/transacción/sucursal) + COD.BCA. + DEBITO + CREDITO + SALDO.
@@ -3093,41 +3114,37 @@ function processBmscPdfLines(lines){
     return true;
   }
 
-  for(const line0 of tableLines){
-    const line=String(line0||'').replace(/\u00ad/g,'').trim();
-    if(!line)continue;
+  for(const tableLines of tablePages){
+    // Cada página empieza un nuevo contexto de descripción.
+    pendingDescription=[];
+    for(const line0 of tableLines){
+      const line=String(line0||'').replace(/\u00ad/g,'').trim();
+      if(!line)continue;
 
-    // El encabezado puede repetirse al comenzar una nueva página del PDF.
-    // Nunca debe convertirse en parte de la descripción de una transacción.
-    const lineNorm=normalize(line);
-    if(lineNorm.includes('fecha') && lineNorm.includes('transaccion') &&
-       lineNorm.includes('debito') && lineNorm.includes('credito') && lineNorm.includes('saldo')){
-      pendingDescription=[];
-      continue;
+      // "SALDO INICIAL" pertenece a la tabla, pero no es una transacción.
+      // No debe contaminar la descripción del primer movimiento.
+      if(/^(?:\d{4}\/\d{2}\/\d{2}\s+)?SALDO INICIAL\b/i.test(line)){
+        pendingDescription=[];
+        continue;
+      }
+
+      // Si encontramos una fila transaccional, procesamos exactamente esa fila.
+      // No dependemos de que el PDF haya separado hora, descripción y fecha en líneas concretas.
+      if(parseOne(line,pendingDescription)){
+        pendingDescription=[];
+        continue;
+      }
+
+      // Solo dentro de la tabla, las líneas que no son fila se conservan como
+      // posible descripción de la siguiente operación.
+      pendingDescription.push(line);
     }
-
-    // "SALDO INICIAL" pertenece a la tabla, pero no es una transacción.
-    // No debe contaminar la descripción del primer movimiento.
-    if(/^(?:\d{4}\/\d{2}\/\d{2}\s+)?SALDO INICIAL\b/i.test(line)){
-      pendingDescription=[];
-      continue;
-    }
-
-    // Si encontramos una fila transaccional, procesamos exactamente esa fila.
-    // No dependemos de que el PDF haya separado hora, descripción y fecha en líneas concretas.
-    if(parseOne(line,pendingDescription)){
-      pendingDescription=[];
-      continue;
-    }
-
-    // Solo dentro de la tabla, las líneas que no son fila se conservan como
-    // posible descripción de la siguiente operación.
-    pendingDescription.push(line);
   }
 
   const money=(n)=>Number(n||0).toLocaleString('es-BO',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const expectedDebitos = [...tableLines].map(x=>String(x)).join(' ').match(/TOTAL DEBITOS\s+([\d.,]+)/i);
-  const expectedCreditos = [...tableLines].map(x=>String(x)).join(' ').match(/TOTAL CREDITOS\s+([\d.,]+)/i);
+  const allTableLines=tablePages.flat();
+  const expectedDebitos = allTableLines.map(x=>String(x)).join(' ').match(/TOTAL DEBITOS\s+([\d.,]+)/i);
+  const expectedCreditos = allTableLines.map(x=>String(x)).join(' ').match(/TOTAL CREDITOS\s+([\d.,]+)/i);
   const pdfDebitos=expectedDebitos?parseAmount(expectedDebitos[1]):null;
   const pdfCreditos=expectedCreditos?parseAmount(expectedCreditos[1]):null;
   const totalsOk =
