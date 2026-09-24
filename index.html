@@ -1984,6 +1984,42 @@ function renderDashboard(app){
     }
   },0);
 }
+/* TX FILTER SUMMARY */
+.tx-filter-summary{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  margin-bottom:14px;
+}
+.tx-filter-summary-item{
+  min-width:0;
+  padding:13px 15px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--card);
+}
+.tx-filter-summary-label{
+  font-size:.68rem;
+  font-weight:800;
+  letter-spacing:.04em;
+  color:var(--muted);
+  margin-bottom:5px;
+}
+.tx-filter-summary-value{
+  font-size:1.05rem;
+  font-weight:800;
+  white-space:nowrap;
+}
+.tx-filter-summary-item.income .tx-filter-summary-value{color:#168653}
+.tx-filter-summary-item.expense .tx-filter-summary-value{color:#d84b55}
+.tx-filter-summary-item.result .tx-filter-summary-value{color:var(--primary)}
+
+@media(max-width:600px){
+  .tx-filter-summary{grid-template-columns:1fr;gap:8px}
+  .tx-filter-summary-item{padding:11px 13px}
+  .tx-filter-summary-value{font-size:1rem}
+}
+
 /* ================= TRANSACCIONES ================= */
 function getAvailableMonths(){
   const months=new Set();
@@ -2087,8 +2123,51 @@ function renderTransacciones(app){
     if(min!==null && !Number.isNaN(min)) list=list.filter(t=>Number(t.monto)>=min); if(max!==null && !Number.isNaN(max)) list=list.filter(t=>Number(t.monto)<=max);
     list.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
     const card=document.getElementById('txListCard');
-    if(!list.length){card.innerHTML='<div class="empty">No hay transacciones para estos filtros.</div>';return;}
-    let html='<div style="font-size:.85rem;color:var(--muted);margin-bottom:8px;">'+list.length+' transacción(es)</div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
+
+    // Resumen dinámico: siempre se calcula sobre la lista YA filtrada.
+    // Los montos se almacenan positivos y el tipo determina el signo.
+    const toCents = value => Math.round((Number(value)||0) * 100);
+    const ingresosCents = list
+      .filter(t=>t.tipo==='Ingreso')
+      .reduce((sum,t)=>sum+toCents(t.monto),0);
+    const gastosCents = list
+      .filter(t=>t.tipo==='Gasto')
+      .reduce((sum,t)=>sum+toCents(t.monto),0);
+    const resultadoCents = ingresosCents - gastosCents;
+
+    const moneyFromCents = cents => fmtMoney(cents/100);
+    const resumen = document.createElement('div');
+    resumen.className='tx-filter-summary';
+    resumen.innerHTML =
+      '<div class="tx-filter-summary-item income">'+
+        '<div class="tx-filter-summary-label">INGRESOS</div>'+
+        '<div class="tx-filter-summary-value">+ '+moneyFromCents(ingresosCents)+'</div>'+
+      '</div>'+
+      '<div class="tx-filter-summary-item expense">'+
+        '<div class="tx-filter-summary-label">GASTOS</div>'+
+        '<div class="tx-filter-summary-value">− '+moneyFromCents(gastosCents)+'</div>'+
+      '</div>'+
+      '<div class="tx-filter-summary-item result">'+
+        '<div class="tx-filter-summary-label">RESULTADO</div>'+
+        '<div class="tx-filter-summary-value">'+(resultadoCents<0?'− ':'')+moneyFromCents(Math.abs(resultadoCents))+'</div>'+
+      '</div>';
+
+    const count = document.createElement('div');
+    count.style.cssText='font-size:.85rem;color:var(--muted);margin-bottom:8px;';
+    count.textContent=list.length+' transacción(es)';
+
+    card.innerHTML='';
+    card.appendChild(resumen);
+    if(!list.length){
+      const empty=document.createElement('div');
+      empty.className='empty';
+      empty.textContent='No hay transacciones para estos filtros.';
+      card.appendChild(empty);
+      return;
+    }
+
+    card.appendChild(count);
+    let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
     list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
     html+='</tbody></table></div>';
     const mobileList=document.createElement('div');
