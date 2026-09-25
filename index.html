@@ -1620,7 +1620,7 @@ let currentMonth = todayKey();
 
 // Filtros de transacciones: se conservan al editar/guardar una transacción.
 let txFilterState = {
-  month: [currentMonth], tipo: [], search: '', cat: [], sub: [], account: [], status: [],
+  month: [currentMonth], tipo: [], concept: [], search: '', cat: [], sub: [], account: [], status: [],
   from: '', to: '', min: '', max: ''
 };
 
@@ -2083,6 +2083,7 @@ function renderTransacciones(app){
       <div class="field"><label>Meses</label><div class="tx-multi-filter" id="filterMonth"></div></div>
       <div class="field"><label>Tipo</label><div class="tx-multi-filter" id="filterTipo"></div></div>
     </div>
+    <div class="field" style="margin-top:10px;"><label>Conceptos combinados</label><div class="tx-multi-filter" id="txConceptFilter"></div><small style="display:block;margin-top:5px;color:var(--muted);">Selecciona conceptos de distintas categorías y se analizarán juntos.</small></div>
     <div class="search-panel">
       <div class="field search-wide"><label>Buscar</label><input type="search" id="txSearch" placeholder="Descripción, categoría, subcategoría, cuenta o referencia"></div>
       <div class="field"><label>Categoría</label><div class="tx-multi-filter" id="txCatFilter"></div></div>
@@ -2183,8 +2184,16 @@ function renderTransacciones(app){
   const cats=[...new Set(state.transactions.map(t=>t.categoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(x=>({value:x,label:x}));
   const subs=[...new Set(state.transactions.map(t=>t.subcategoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(x=>({value:x,label:x}));
   const accounts=[...new Set(state.transactions.map(t=>t.cuenta).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(x=>({value:x,label:x}));
+  const concepts=[...new Map(state.transactions
+    .filter(t=>t.categoria||t.subcategoria)
+    .map(t=>{
+      const key=(t.categoria||'')+'||'+(t.subcategoria||'');
+      const label=(t.categoria||'Sin categoría')+(t.subcategoria?' · '+t.subcategoria:'');
+      return [key,{value:key,label:label}];
+    })).values()].sort((a,b)=>a.label.localeCompare(b.label));
   buildMulti('filterMonth',months,txFilterState.month||[currentMonth],'Todos los meses');
   buildMulti('filterTipo',[{value:'Ingreso',label:'Ingresos'},{value:'Gasto',label:'Gastos'}],txFilterState.tipo,'Todos');
+  buildMulti('txConceptFilter',concepts,txFilterState.concept,'Todos los conceptos');
   buildMulti('txCatFilter',cats,txFilterState.cat,'Todas');
   buildMulti('txSubFilter',subs,txFilterState.sub,'Todas');
   buildMulti('txAccountFilter',accounts,txFilterState.account,'Todas');
@@ -2199,6 +2208,7 @@ function renderTransacciones(app){
   function renderList(){
     const monthsSelected=selectedValues('filterMonth');
     const tiposSelected=selectedValues('filterTipo');
+    const conceptsSelected=selectedValues('txConceptFilter');
     const catsSelected=selectedValues('txCatFilter');
     const subsSelected=selectedValues('txSubFilter');
     const accountsSelected=selectedValues('txAccountFilter');
@@ -2207,6 +2217,7 @@ function renderTransacciones(app){
     txFilterState={
       month:monthsSelected,
       tipo:tiposSelected,
+      concept:conceptsSelected,
       search:document.getElementById('txSearch').value,
       cat:catsSelected,
       sub:subsSelected,
@@ -2231,6 +2242,7 @@ function renderTransacciones(app){
     let list=state.transactions.slice();
     if(monthsSelected.length) list=list.filter(t=>monthsSelected.includes(monthKey(t.fecha)));
     if(tiposSelected.length) list=list.filter(t=>tiposSelected.includes(t.tipo));
+    if(conceptsSelected.length) list=list.filter(t=>conceptsSelected.includes((t.categoria||'')+'||'+(t.subcategoria||'')));
     if(q) list=list.filter(t=>normalize([t.descripcion,t.categoria,t.subcategoria,t.cuenta,t.referencia,t.referencia_id].filter(Boolean).join(' ')).includes(q));
     if(catsSelected.length) list=list.filter(t=>catsSelected.includes(t.categoria));
     if(subsSelected.length) list=list.filter(t=>subsSelected.includes(t.subcategoria));
@@ -2300,9 +2312,9 @@ function renderTransacciones(app){
   }
 
   document.getElementById('clearTxFilters').onclick=()=>{
-    ['filterMonth','filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter'].forEach(id=>document.querySelectorAll('#'+id+' input[type="checkbox"]').forEach(cb=>cb.checked=false));
+    ['filterMonth','filterTipo','txConceptFilter','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter'].forEach(id=>document.querySelectorAll('#'+id+' input[type="checkbox"]').forEach(cb=>cb.checked=false));
     ['txSearch','txDateFrom','txDateTo','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');
-    txFilterState={month:[],tipo:[],search:'',cat:[],sub:[],account:[],status:[],from:'',to:'',min:'',max:''};
+    txFilterState={month:[],tipo:[],concept:[],search:'',cat:[],sub:[],account:[],status:[],from:'',to:'',min:'',max:''};
     document.querySelectorAll('.tx-multi-filter').forEach(el=>updateMultiLabel(el,el.id==='txCatFilter'||el.id==='txSubFilter'||el.id==='txAccountFilter'?'Todas':el.id==='filterMonth'?'Todos los meses':'Todos'));
     renderList();
   };
@@ -2310,7 +2322,6 @@ function renderTransacciones(app){
   document.getElementById('addManualBtn').onclick=()=>openManualForm();
   renderList();
 }
-
 function openEditTransaction(txId){
   const tx = state.transactions.find(t=>t.id===txId);
   if(!tx) return;
