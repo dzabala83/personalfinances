@@ -296,9 +296,28 @@ canvas{max-height:260px;}
 .tx-filter-summary-item.result .tx-filter-summary-value{color:var(--primary)}
 
 @media(max-width:600px){
-  .tx-filter-summary{grid-template-columns:1fr;gap:8px}
-  .tx-filter-summary-item{padding:11px 13px}
-  .tx-filter-summary-value{font-size:1rem}
+  .tx-filter-summary{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px;
+    margin-bottom:12px;
+  }
+  .tx-filter-summary-item{
+    padding:10px 7px;
+    border-radius:11px;
+    text-align:center;
+    overflow:hidden;
+  }
+  .tx-filter-summary-label{
+    font-size:.58rem;
+    letter-spacing:.02em;
+    margin-bottom:4px;
+  }
+  .tx-filter-summary-value{
+    font-size:.78rem;
+    line-height:1.15;
+    white-space:normal;
+    overflow-wrap:anywhere;
+  }
 }
 
 
