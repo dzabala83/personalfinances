@@ -321,6 +321,25 @@ canvas{max-height:260px;}
 }
 
 
+</style>
+<style id="tx-multi-filter-v1">
+.tx-multi-filter{position:relative;width:100%}
+.tx-multi-trigger{width:100%;min-height:42px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--text);padding:9px 11px;display:flex;align-items:center;justify-content:space-between;text-align:left;font:inherit;cursor:pointer}
+.tx-multi-trigger:focus{outline:2px solid rgba(35,133,238,.25);outline-offset:1px}
+.tx-multi-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tx-multi-label.muted{color:var(--muted)}
+.tx-multi-arrow{margin-left:8px;color:var(--muted)}
+.tx-multi-menu{display:none;position:absolute;z-index:80;left:0;right:0;top:calc(100% + 5px);background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 28px rgba(15,35,70,.16);padding:8px;max-height:280px;overflow:auto}
+.tx-multi-filter.open .tx-multi-menu{display:block}
+.tx-multi-actions{display:flex;gap:6px;padding:2px 2px 7px;position:sticky;top:-8px;background:var(--card);z-index:1}
+.tx-multi-actions button{flex:1;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);padding:7px 6px;font-size:.72rem}
+.tx-multi-option{display:flex;align-items:center;gap:9px;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:.86rem;line-height:1.15}
+.tx-multi-option:hover{background:var(--bg)}
+.tx-multi-option input{width:18px;height:18px;accent-color:#2868d8;flex:0 0 auto}
+@media(max-width:600px){
+  .tx-multi-menu{max-height:300px}
+  .tx-multi-option{min-height:42px;font-size:.88rem}
+}
 </style></style>
 
 <style>
@@ -1601,7 +1620,7 @@ let currentMonth = todayKey();
 
 // Filtros de transacciones: se conservan al editar/guardar una transacción.
 let txFilterState = {
-  month: null, tipo: '', search: '', cat: '', sub: '', account: '', status: '',
+  month: [currentMonth], tipo: [], search: '', cat: [], sub: [], account: [], status: [],
   from: '', to: '', min: '', max: ''
 };
 
@@ -2056,22 +2075,20 @@ function monthSelectOptions(selected){
 }
 
 function renderTransacciones(app){
-  const wrap = document.createElement('div');
-  const controls = document.createElement('div');
-  controls.className = 'card';
-  controls.innerHTML = `
+  const wrap=document.createElement('div');
+  const controls=document.createElement('div');
+  controls.className='card';
+  controls.innerHTML=`
     <div class="grid2">
-      <div class="field"><label>Mes</label><select id="filterMonth">${monthSelectOptions(currentMonth)}</select></div>
-      <div class="field"><label>Tipo</label>
-        <select id="filterTipo"><option value="">Todos</option><option value="Ingreso">Ingresos</option><option value="Gasto">Gastos</option></select>
-      </div>
+      <div class="field"><label>Meses</label><div class="tx-multi-filter" id="filterMonth"></div></div>
+      <div class="field"><label>Tipo</label><div class="tx-multi-filter" id="filterTipo"></div></div>
     </div>
     <div class="search-panel">
       <div class="field search-wide"><label>Buscar</label><input type="search" id="txSearch" placeholder="Descripción, categoría, subcategoría, cuenta o referencia"></div>
-      <div class="field"><label>Categoría</label><select id="txCatFilter"><option value="">Todas</option></select></div>
-      <div class="field"><label>Subcategoría</label><select id="txSubFilter"><option value="">Todas</option></select></div>
-      <div class="field"><label>Cuenta</label><select id="txAccountFilter"><option value="">Todas</option></select></div>
-      <div class="field"><label>Estado</label><select id="txStatusFilter"><option value="">Todos</option><option value="pendiente">Pendiente</option><option value="categorizado">Categorizado</option></select></div>
+      <div class="field"><label>Categoría</label><div class="tx-multi-filter" id="txCatFilter"></div></div>
+      <div class="field"><label>Subcategoría</label><div class="tx-multi-filter" id="txSubFilter"></div></div>
+      <div class="field"><label>Cuenta</label><div class="tx-multi-filter" id="txAccountFilter"></div></div>
+      <div class="field"><label>Estado</label><div class="tx-multi-filter" id="txStatusFilter"></div></div>
       <div class="field"><label>Desde</label><input type="date" id="txDateFrom"></div>
       <div class="field"><label>Hasta</label><input type="date" id="txDateTo"></div>
       <div class="field"><label>Monto mínimo</label><input type="text" inputmode="decimal" id="txMinAmount" placeholder="0"></div>
@@ -2084,95 +2101,157 @@ function renderTransacciones(app){
     <button class="btn secondary" id="addManualBtn" style="margin-top:8px;width:100%;">+ Agregar transacción manual</button>
   `;
   wrap.appendChild(controls);
-  const listCard = document.createElement('div'); listCard.className='card'; listCard.id='txListCard'; wrap.appendChild(listCard); app.appendChild(wrap);
+  const listCard=document.createElement('div');
+  listCard.className='card';
+  listCard.id='txListCard';
+  wrap.appendChild(listCard);
+  app.appendChild(wrap);
 
-  function fillFilterOptions(){
-    const catSel=document.getElementById('txCatFilter'), subSel=document.getElementById('txSubFilter'), accSel=document.getElementById('txAccountFilter');
-    const cats=[...new Set(state.transactions.map(t=>t.categoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-    const subs=[...new Set(state.transactions.map(t=>t.subcategoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-    const accounts=[...new Set(state.transactions.map(t=>t.cuenta).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-    catSel.innerHTML='<option value="">Todas</option>'+cats.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
-    subSel.innerHTML='<option value="">Todas</option>'+subs.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
-    accSel.innerHTML='<option value="">Todas</option>'+accounts.map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+  const monthNames=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  function asArray(value){
+    if(Array.isArray(value)) return value.filter(Boolean);
+    return value ? [value] : [];
   }
-  fillFilterOptions();
+  function selectedValues(id){
+    return [...document.querySelectorAll('#'+id+' input[type="checkbox"]:checked')].map(x=>x.value);
+  }
+  function buildMulti(id,options,selected,allText){
+    const el=document.getElementById(id);
+    const saved=asArray(selected);
+    el.innerHTML=`
+      <button type="button" class="tx-multi-trigger" aria-expanded="false">
+        <span class="tx-multi-label"></span><span class="tx-multi-arrow">⌄</span>
+      </button>
+      <div class="tx-multi-menu">
+        <div class="tx-multi-actions">
+          <button type="button" class="tx-multi-all">Todos</button>
+          <button type="button" class="tx-multi-none">Limpiar</button>
+        </div>
+        <div class="tx-multi-options"></div>
+      </div>`;
+    const box=el.querySelector('.tx-multi-options');
+    options.forEach(opt=>{
+      const row=document.createElement('label');
+      row.className='tx-multi-option';
+      row.innerHTML='<input type="checkbox" value="'+escapeHtml(opt.value)+'"><span>'+escapeHtml(opt.label)+'</span>';
+      const cb=row.querySelector('input');
+      cb.checked=saved.includes(opt.value);
+      box.appendChild(row);
+      cb.addEventListener('change',()=>{
+        updateMultiLabel(el,allText);
+        renderList();
+      });
+    });
+    const trigger=el.querySelector('.tx-multi-trigger');
+    trigger.onclick=(ev)=>{
+      ev.stopPropagation();
+      document.querySelectorAll('.tx-multi-filter.open').forEach(x=>{if(x!==el)x.classList.remove('open');});
+      el.classList.toggle('open');
+      trigger.setAttribute('aria-expanded',el.classList.contains('open')?'true':'false');
+    };
+    el.querySelector('.tx-multi-all').onclick=()=>{
+      box.querySelectorAll('input').forEach(cb=>cb.checked=true);
+      updateMultiLabel(el,allText);
+      renderList();
+    };
+    el.querySelector('.tx-multi-none').onclick=()=>{
+      box.querySelectorAll('input').forEach(cb=>cb.checked=false);
+      updateMultiLabel(el,allText);
+      renderList();
+    };
+    updateMultiLabel(el,allText);
+  }
+  function updateMultiLabel(el,allText){
+    const vals=[...el.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.parentElement.querySelector('span').textContent);
+    const label=el.querySelector('.tx-multi-label');
+    if(!vals.length){label.textContent=allText;label.classList.add('muted');return;}
+    label.classList.remove('muted');
+    if(vals.length===1){label.textContent=vals[0];return;}
+    label.textContent=vals.length+' seleccionados';
+  }
+  document.addEventListener('click',function closeMulti(e){
+    if(!e.target.closest('.tx-multi-filter')){
+      document.querySelectorAll('.tx-multi-filter.open').forEach(x=>x.classList.remove('open'));
+    }
+  },{once:false});
 
-  // Recuperamos los filtros guardados para que no se pierdan al renderizar
-  // después de editar, eliminar o guardar una transacción.
-  const saved = txFilterState;
-  if(saved.month) document.getElementById('filterMonth').value=saved.month;
-  if(saved.tipo) document.getElementById('filterTipo').value=saved.tipo;
-  document.getElementById('txSearch').value=saved.search||'';
-  document.getElementById('txCatFilter').value=saved.cat||'';
-  document.getElementById('txSubFilter').value=saved.sub||'';
-  document.getElementById('txAccountFilter').value=saved.account||'';
-  document.getElementById('txStatusFilter').value=saved.status||'';
-  document.getElementById('txDateFrom').value=saved.from||'';
-  document.getElementById('txDateTo').value=saved.to||'';
-  document.getElementById('txMinAmount').value=saved.min||'';
-  document.getElementById('txMaxAmount').value=saved.max||'';
+  const months=getAvailableMonths().map(m=>{
+    const [y,mo]=m.split('-');
+    return {value:m,label:(monthNames[Number(mo)-1]||mo)+' '+y};
+  });
+  const cats=[...new Set(state.transactions.map(t=>t.categoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(x=>({value:x,label:x}));
+  const subs=[...new Set(state.transactions.map(t=>t.subcategoria).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(x=>({value:x,label:x}));
+  const accounts=[...new Set(state.transactions.map(t=>t.cuenta).filter(Boolean))].sort((a,b)=>a.localeCompare(b)).map(x=>({value:x,label:x}));
+  buildMulti('filterMonth',months,txFilterState.month||[currentMonth],'Todos los meses');
+  buildMulti('filterTipo',[{value:'Ingreso',label:'Ingresos'},{value:'Gasto',label:'Gastos'}],txFilterState.tipo,'Todos');
+  buildMulti('txCatFilter',cats,txFilterState.cat,'Todas');
+  buildMulti('txSubFilter',subs,txFilterState.sub,'Todas');
+  buildMulti('txAccountFilter',accounts,txFilterState.account,'Todas');
+  buildMulti('txStatusFilter',[{value:'pendiente',label:'Pendiente'},{value:'categorizado',label:'Categorizado'}],txFilterState.status,'Todos');
+
+  document.getElementById('txSearch').value=txFilterState.search||'';
+  document.getElementById('txDateFrom').value=txFilterState.from||'';
+  document.getElementById('txDateTo').value=txFilterState.to||'';
+  document.getElementById('txMinAmount').value=txFilterState.min||'';
+  document.getElementById('txMaxAmount').value=txFilterState.max||'';
 
   function renderList(){
-    // Guardamos siempre el estado actual de los filtros antes de renderizar.
-    txFilterState = {
-      month: document.getElementById('filterMonth').value || currentMonth,
-      tipo: document.getElementById('filterTipo').value,
-      search: document.getElementById('txSearch').value,
-      cat: document.getElementById('txCatFilter').value,
-      sub: document.getElementById('txSubFilter').value,
-      account: document.getElementById('txAccountFilter').value,
-      status: document.getElementById('txStatusFilter').value,
-      from: document.getElementById('txDateFrom').value,
-      to: document.getElementById('txDateTo').value,
-      min: document.getElementById('txMinAmount').value,
-      max: document.getElementById('txMaxAmount').value
+    const monthsSelected=selectedValues('filterMonth');
+    const tiposSelected=selectedValues('filterTipo');
+    const catsSelected=selectedValues('txCatFilter');
+    const subsSelected=selectedValues('txSubFilter');
+    const accountsSelected=selectedValues('txAccountFilter');
+    const statusSelected=selectedValues('txStatusFilter');
+
+    txFilterState={
+      month:monthsSelected,
+      tipo:tiposSelected,
+      search:document.getElementById('txSearch').value,
+      cat:catsSelected,
+      sub:subsSelected,
+      account:accountsSelected,
+      status:statusSelected,
+      from:document.getElementById('txDateFrom').value,
+      to:document.getElementById('txDateTo').value,
+      min:document.getElementById('txMinAmount').value,
+      max:document.getElementById('txMaxAmount').value
     };
-    const m=document.getElementById('filterMonth').value; currentMonth=m||currentMonth;
-    const tipo=document.getElementById('filterTipo').value;
+
+    if(monthsSelected.length===1) currentMonth=monthsSelected[0];
+
     const q=normalize(document.getElementById('txSearch').value||'');
-    const cat=document.getElementById('txCatFilter').value, sub=document.getElementById('txSubFilter').value, acc=document.getElementById('txAccountFilter').value, status=document.getElementById('txStatusFilter').value;
-    const from=document.getElementById('txDateFrom').value, to=document.getElementById('txDateTo').value;
-    const minTxt=document.getElementById('txMinAmount').value, maxTxt=document.getElementById('txMaxAmount').value;
-    const min=minTxt?parseAmount(minTxt):null, max=maxTxt?parseAmount(maxTxt):null;
+    const from=document.getElementById('txDateFrom').value;
+    const to=document.getElementById('txDateTo').value;
+    const minTxt=document.getElementById('txMinAmount').value;
+    const maxTxt=document.getElementById('txMaxAmount').value;
+    const min=minTxt?parseAmount(minTxt):null;
+    const max=maxTxt?parseAmount(maxTxt):null;
+
     let list=state.transactions.slice();
-    if(m) list=list.filter(t=>monthKey(t.fecha)===m);
-    if(tipo) list=list.filter(t=>t.tipo===tipo);
+    if(monthsSelected.length) list=list.filter(t=>monthsSelected.includes(monthKey(t.fecha)));
+    if(tiposSelected.length) list=list.filter(t=>tiposSelected.includes(t.tipo));
     if(q) list=list.filter(t=>normalize([t.descripcion,t.categoria,t.subcategoria,t.cuenta,t.referencia,t.referencia_id].filter(Boolean).join(' ')).includes(q));
-    if(cat) list=list.filter(t=>t.categoria===cat); if(sub) list=list.filter(t=>t.subcategoria===sub); if(acc) list=list.filter(t=>t.cuenta===acc); if(status) list=list.filter(t=>t.estado===status);
-    if(from) list=list.filter(t=>(t.fecha||'')>=from); if(to) list=list.filter(t=>(t.fecha||'')<=to);
-    if(min!==null && !Number.isNaN(min)) list=list.filter(t=>Number(t.monto)>=min); if(max!==null && !Number.isNaN(max)) list=list.filter(t=>Number(t.monto)<=max);
+    if(catsSelected.length) list=list.filter(t=>catsSelected.includes(t.categoria));
+    if(subsSelected.length) list=list.filter(t=>subsSelected.includes(t.subcategoria));
+    if(accountsSelected.length) list=list.filter(t=>accountsSelected.includes(t.cuenta));
+    if(statusSelected.length) list=list.filter(t=>statusSelected.includes(t.estado));
+    if(from) list=list.filter(t=>(t.fecha||'')>=from);
+    if(to) list=list.filter(t=>(t.fecha||'')<=to);
+    if(min!==null&&!Number.isNaN(min)) list=list.filter(t=>Number(t.monto)>=min);
+    if(max!==null&&!Number.isNaN(max)) list=list.filter(t=>Number(t.monto)<=max);
     list.sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
+
     const card=document.getElementById('txListCard');
-
-    // Resumen dinámico: siempre se calcula sobre la lista YA filtrada.
-    // Los montos se almacenan positivos y el tipo determina el signo.
-    const toCents = value => Math.round((Number(value)||0) * 100);
-    const ingresosCents = list
-      .filter(t=>t.tipo==='Ingreso')
-      .reduce((sum,t)=>sum+toCents(t.monto),0);
-    const gastosCents = list
-      .filter(t=>t.tipo==='Gasto')
-      .reduce((sum,t)=>sum+toCents(t.monto),0);
-    const resultadoCents = ingresosCents - gastosCents;
-
-    const moneyFromCents = cents => fmtMoney(cents/100);
-    const resumen = document.createElement('div');
+    const toCents=value=>Math.round((Number(value)||0)*100);
+    const ingresosCents=list.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+toCents(t.monto),0);
+    const gastosCents=list.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+toCents(t.monto),0);
+    const resultadoCents=ingresosCents-gastosCents;
+    const moneyFromCents=cents=>fmtMoney(cents/100);
+    const resumen=document.createElement('div');
     resumen.className='tx-filter-summary';
-    resumen.innerHTML =
-      '<div class="tx-filter-summary-item income">'+
-        '<div class="tx-filter-summary-label">INGRESOS</div>'+
-        '<div class="tx-filter-summary-value">+ '+moneyFromCents(ingresosCents)+'</div>'+
-      '</div>'+
-      '<div class="tx-filter-summary-item expense">'+
-        '<div class="tx-filter-summary-label">GASTOS</div>'+
-        '<div class="tx-filter-summary-value">− '+moneyFromCents(gastosCents)+'</div>'+
-      '</div>'+
-      '<div class="tx-filter-summary-item result">'+
-        '<div class="tx-filter-summary-label">RESULTADO</div>'+
-        '<div class="tx-filter-summary-value">'+(resultadoCents<0?'− ':'')+moneyFromCents(Math.abs(resultadoCents))+'</div>'+
-      '</div>';
-
-    const count = document.createElement('div');
+    resumen.innerHTML='<div class="tx-filter-summary-item income"><div class="tx-filter-summary-label">INGRESOS</div><div class="tx-filter-summary-value">+ '+moneyFromCents(ingresosCents)+'</div></div><div class="tx-filter-summary-item expense"><div class="tx-filter-summary-label">GASTOS</div><div class="tx-filter-summary-value">− '+moneyFromCents(gastosCents)+'</div></div><div class="tx-filter-summary-item result"><div class="tx-filter-summary-label">RESULTADO</div><div class="tx-filter-summary-value">'+(resultadoCents<0?'− ':'')+moneyFromCents(Math.abs(resultadoCents))+'</div></div>';
+    const count=document.createElement('div');
     count.style.cssText='font-size:.85rem;color:var(--muted);margin-bottom:8px;';
     count.textContent=list.length+' transacción(es)';
 
@@ -2185,53 +2264,51 @@ function renderTransacciones(app){
       card.appendChild(empty);
       return;
     }
-
     card.appendChild(count);
+
     let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
     list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
     html+='</tbody></table></div>';
+
     const mobileList=document.createElement('div');
     mobileList.className='tx-mobile-list';
     list.forEach(t=>{
       const gasto=t.tipo==='Gasto';
       const d=new Date((t.fecha||'')+'T00:00:00');
-      const monthNames=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
-      const mon=Number.isNaN(d.getTime()) ? '' : monthNames[d.getMonth()];
-      const day=Number.isNaN(d.getTime()) ? (t.fecha||'').slice(-2) : String(d.getDate()).padStart(2,'0');
+      const mon=Number.isNaN(d.getTime())?'':(['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][d.getMonth()]);
+      const day=Number.isNaN(d.getTime())?(t.fecha||'').slice(-2):String(d.getDate()).padStart(2,'0');
       const item=document.createElement('div');
       item.className='tx-mobile-card '+(gasto?'gasto':'ingreso');
-      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
+      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
       item.querySelector('.tx-mobile-desc').textContent=t.descripcion||'Sin descripción';
-      item.querySelector('.tx-mobile-sub').textContent=t.categoria ? (t.categoria+(t.subcategoria?' / '+t.subcategoria:'')) : 'Sin categoría';
+      item.querySelector('.tx-mobile-sub').textContent=t.categoria?(t.categoria+(t.subcategoria?' / '+t.subcategoria:'')):'Sin categoría';
       mobileList.appendChild(item);
     });
+
     card.innerHTML=html;
-    // El resumen debe permanecer visible también cuando existen transacciones.
-    // innerHTML reemplaza el contenido anterior, por eso lo reinsertamos después.
     card.prepend(count);
     card.prepend(resumen);
     card.classList.toggle('tx-compact-mode',localStorage.getItem('nexo-pref-compact-tx')==='true');
     card.appendChild(mobileList);
+
     const editHandler=id=>openEditTransaction(id);
-    const deleteHandler=id=>{ const tx=state.transactions.find(t=>t.id===id); if(!tx) return; showDeleteTransactionModal(tx, async()=>{ const original=state.transactions.slice(); state.transactions=state.transactions.filter(t=>t.id!==tx.id); const result=await saveState(); if(!result.cloud){ state.transactions=original; throw (result.error||new Error('No se pudo sincronizar con Supabase')); } renderList(); renderNav(); showToast('Transacción eliminada y sincronizada.'); }); };
+    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
     card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.edit));
     card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.del));
     card.querySelectorAll('[data-mobile-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.mobileEdit));
     card.querySelectorAll('[data-mobile-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.mobileDel));
   }
-  ['filterMonth','filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo'].forEach(id=>document.getElementById(id).onchange=renderList);
-  ['txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).addEventListener('input',renderList));
+
   document.getElementById('clearTxFilters').onclick=()=>{
-    document.getElementById('filterMonth').value=currentMonth;
-    ['filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter','txDateFrom','txDateTo','txSearch','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');
-    txFilterState={month:currentMonth,tipo:'',search:'',cat:'',sub:'',account:'',status:'',from:'',to:'',min:'',max:''};
+    ['filterMonth','filterTipo','txCatFilter','txSubFilter','txAccountFilter','txStatusFilter'].forEach(id=>document.querySelectorAll('#'+id+' input[type="checkbox"]').forEach(cb=>cb.checked=false));
+    ['txSearch','txDateFrom','txDateTo','txMinAmount','txMaxAmount'].forEach(id=>document.getElementById(id).value='');
+    txFilterState={month:[],tipo:[],search:'',cat:[],sub:[],account:[],status:[],from:'',to:'',min:'',max:''};
+    document.querySelectorAll('.tx-multi-filter').forEach(el=>updateMultiLabel(el,el.id==='txCatFilter'||el.id==='txSubFilter'||el.id==='txAccountFilter'?'Todas':el.id==='filterMonth'?'Todos los meses':'Todos'));
     renderList();
   };
-  document.getElementById('applyTxFilters').onclick=()=>{
-    renderList();
-    showToast('✓ Filtros aplicados y conservados');
-  };
-  document.getElementById('addManualBtn').onclick=()=>openManualForm(); renderList();
+  document.getElementById('applyTxFilters').onclick=()=>{renderList();showToast('✓ Filtros aplicados y conservados');};
+  document.getElementById('addManualBtn').onclick=()=>openManualForm();
+  renderList();
 }
 
 function openEditTransaction(txId){
