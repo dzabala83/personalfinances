@@ -2206,6 +2206,10 @@ function renderTransacciones(app){
       mobileList.appendChild(item);
     });
     card.innerHTML=html;
+    // El resumen debe permanecer visible también cuando existen transacciones.
+    // innerHTML reemplaza el contenido anterior, por eso lo reinsertamos después.
+    card.prepend(count);
+    card.prepend(resumen);
     card.classList.toggle('tx-compact-mode',localStorage.getItem('nexo-pref-compact-tx')==='true');
     card.appendChild(mobileList);
     const editHandler=id=>openEditTransaction(id);
