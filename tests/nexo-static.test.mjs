@@ -55,21 +55,22 @@ test('BMSC parser handles repeated table headers page by page',()=>{
 
 test('BMSC parser only reads transactions after the table header',()=>{
   const start=html.indexOf('function processBmscPdfLines(lines){');
-  const end=html.indexOf('\nfunction findHeaderRow',start);
+  const end=html.indexOf('\\nfunction findHeaderRow',start);
   assert.ok(start>=0 && end>start);
   const block=html.slice(start,end);
-  assert.match(block,/tableHeaderIndex = lines\.findIndex/);
-  assert.match(block,/n\.includes\('fecha'\)/);
-  assert.match(block,/n\.includes\('transaccion'\)/);
-  assert.match(block,/n\.includes\('debito'\)/);
-  assert.match(block,/n\.includes\('credito'\)/);
-  assert.match(block,/n\.includes\('saldo'\)/);
-  assert.match(block,/const tableLines=lines\.slice\(tableHeaderIndex\+1\)/);
-  assert.match(block,/for\(const line0 of tableLines\)/);
+  assert.match(block,/const isTableHeader=\\(line\\)=>/);
+  assert.match(block,/n\\.includes\\('fecha'\\)/);
+  assert.match(block,/n\\.includes\\('transaccion'\\)/);
+  assert.match(block,/n\\.includes\\('debito'\\)/);
+  assert.match(block,/n\\.includes\\('credito'\\)/);
+  assert.match(block,/n\\.includes\\('saldo'\\)/);
+  assert.match(block,/const tablePages=pageGroups\\.map/);
+  assert.match(block,/const headerIndex=pageLines\\.findIndex\\(isTableHeader\\)/);
+  assert.match(block,/pageLines\\.slice\\(headerIndex\\+1\\)/);
+  assert.match(block,/for\\(const line0 of tableLines\\)/);
   assert.match(block,/SALDO INICIAL/);
-  assert.match(block,/expectedDebitos = \[\.\.\.tableLines\]/);
+  assert.match(block,/expectedDebitos = allTableLines\\.map/);
 });
-
 test('pending assignment allows category without subcategory and still queues',()=>{
   const start=html.indexOf("div.querySelector('[data-assign]').onclick=async()=>");
   const end=html.indexOf('\n      };',start);
