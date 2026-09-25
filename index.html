@@ -3362,7 +3362,10 @@ async function processBmscPdfLines(lines){
       resultDiv.innerHTML += '<div class="alert danger">⚠️ No se pudo sincronizar con la nube. El extracto queda solo localmente hasta resolver la conexión.</div>';
       console.error('Detalle de sincronización BMSC:',syncResult.error);
     }
-    renderNav();
+    const latest=importedTransactions[importedTransactions.length-1];
+    if(latest?.fecha) currentMonth=monthKey(latest.fecha);
+    currentTab='transacciones';
+    render();
   }else{
     resultDiv.innerHTML=`
       <div class="alert warn">📄 El PDF BMSC fue leído, pero no se encontraron movimientos con el patrón esperado.</div>
@@ -3510,6 +3513,12 @@ function processBankRows(rows){
     ${duplicadas>0?`<div class="alert warn">↩️ ${duplicadas} ya existían y se omitieron (evitando duplicados).</div>`:''}
   `;
   renderNav();
+  if(imported>0){
+    const latest=state.transactions[state.transactions.length-1];
+    if(latest?.fecha) currentMonth=monthKey(latest.fecha);
+    currentTab='transacciones';
+    render();
+  }
 }
 
 /* Confirmación reutilizable con espera de 10 segundos */
