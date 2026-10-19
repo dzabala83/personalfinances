@@ -1814,7 +1814,7 @@ function renderContrapartes(app){
   head.querySelector('#addCounterparty').onclick=()=>openCounterpartyForm();
   app.appendChild(wrap);
 }
-function openCounterpartyForm(id){
+function openCounterpartyForm(id,onCreated){
   const existing=(state.contrapartes||[]).find(p=>p.id===id);
   const p=existing||{id:crypto.randomUUID(),nombre:'',tipo:'Persona',telefono:'',email:'',notas:'',activo:true};
   const overlay=document.createElement('div');
@@ -1823,7 +1823,7 @@ function openCounterpartyForm(id){
   document.body.appendChild(overlay);
   overlay.querySelector('#cpNombre').value=p.nombre||'';overlay.querySelector('#cpTelefono').value=p.telefono||'';overlay.querySelector('#cpEmail').value=p.email||'';overlay.querySelector('#cpNotas').value=p.notas||'';
   overlay.querySelector('#cpCancel').onclick=()=>overlay.remove();
-  overlay.querySelector('#cpSave').onclick=()=>{const nombre=overlay.querySelector('#cpNombre').value.trim();if(!nombre){showToast('Escribe un nombre');return;}const values={id:p.id,nombre,tipo:overlay.querySelector('#cpTipo').value,telefono:overlay.querySelector('#cpTelefono').value.trim(),email:overlay.querySelector('#cpEmail').value.trim(),notas:overlay.querySelector('#cpNotas').value.trim(),activo:p.activo!==false};if(existing)Object.assign(existing,values);else(state.contrapartes||(state.contrapartes=[])).push(values);saveState();overlay.remove();render();showToast('Contraparte guardada');};
+  overlay.querySelector('#cpSave').onclick=()=>{const nombre=overlay.querySelector('#cpNombre').value.trim();if(!nombre){showToast('Escribe un nombre');return;}const values={id:p.id,nombre,tipo:overlay.querySelector('#cpTipo').value,telefono:overlay.querySelector('#cpTelefono').value.trim(),email:overlay.querySelector('#cpEmail').value.trim(),notas:overlay.querySelector('#cpNotas').value.trim(),activo:p.activo!==false};if(existing)Object.assign(existing,values);else(state.contrapartes||(state.contrapartes=[])).push(values);saveState();overlay.remove();if(!existing&&typeof onCreated==='function')onCreated(values);render();showToast('Contraparte guardada');};
 }
 
 function render(){
@@ -2321,8 +2321,8 @@ function renderTransacciones(app){
     }
     card.appendChild(count);
 
-    let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
-    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
+    let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Contraparte</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
+    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td>${escapeHtml((state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'—')}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
     html+='</tbody></table></div>';
 
     const mobileList=document.createElement('div');
@@ -2334,7 +2334,7 @@ function renderTransacciones(app){
       const day=Number.isNaN(d.getTime())?(t.fecha||'').slice(-2):String(d.getDate()).padStart(2,'0');
       const item=document.createElement('div');
       item.className='tx-mobile-card '+(gasto?'gasto':'ingreso');
-      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
+      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-cat">👤 ${escapeHtml((state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'Sin contraparte')}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
       item.querySelector('.tx-mobile-desc').textContent=t.descripcion||'Sin descripción';
       item.querySelector('.tx-mobile-sub').textContent=t.categoria?(t.categoria+(t.subcategoria?' / '+t.subcategoria:'')):'Sin categoría';
       mobileList.appendChild(item);
@@ -2379,14 +2379,16 @@ function openEditTransaction(txId){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${c.nombre}" ${c.nombre===tx.categoria?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
       <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
-      <div class="field"><label>Contraparte (opcional)</label><select id="eContraparte"><option value="">Sin contraparte</option></select></div>
+      <div class="field"><label>Contraparte (opcional)</label><div style="display:flex;gap:8px"><select id="eContraparte" style="flex:1"><option value="">Sin contraparte</option></select><button type="button" class="btn secondary" id="eNewContraparte">+ Crear</button></div><small style="color:var(--muted)">Asocia esta transacción a una persona, negocio o servicio.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;">
         <button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   const eContraparte=document.getElementById('eContraparte');
-  (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;if(p.id===(tx.contraparteId||''))o.selected=true;eContraparte.appendChild(o);});
+  const fillEditCounterparties=(selectedId)=>{eContraparte.innerHTML='<option value="">Sin contraparte</option>'; (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;if(p.id===(selectedId||''))o.selected=true;eContraparte.appendChild(o);});};
+  fillEditCounterparties(tx.contraparteId);
+  document.getElementById('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>fillEditCounterparties(created.id));
   function refreshSubs(){
     const cat=getCategory(tx.tipo,document.getElementById('eCat').value);
     const subs=cat?.subcategorias||[];
@@ -2429,7 +2431,7 @@ function openManualForm(){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="mMonto" placeholder="0" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="mCat"></select></div>
       <div class="field"><label>Subcategoría</label><select id="mSub"><option value="">(ninguna)</option></select></div>
-      <div class="field"><label>Contraparte (opcional)</label><select id="mContraparte"><option value="">Sin contraparte</option></select></div>
+      <div class="field"><label>Contraparte (opcional)</label><div style="display:flex;gap:8px"><select id="mContraparte" style="flex:1"><option value="">Sin contraparte</option></select><button type="button" class="btn secondary" id="mNewContraparte">+ Crear</button></div><small style="color:var(--muted)">Asocia este movimiento a una persona, negocio o servicio.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;">
         <button class="btn secondary" id="mCancel">Cancelar</button>
         <button class="btn" id="mSave">Guardar</button>
@@ -2438,7 +2440,9 @@ function openManualForm(){
   `;
   document.body.appendChild(overlay);
   const mContraparte=document.getElementById('mContraparte');
-  (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;mContraparte.appendChild(o);});
+  const fillManualCounterparties=(selectedId)=>{mContraparte.innerHTML='<option value="">Sin contraparte</option>'; (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;if(p.id===(selectedId||''))o.selected=true;mContraparte.appendChild(o);});};
+  fillManualCounterparties();
+  document.getElementById('mNewContraparte').onclick=()=>openCounterpartyForm(null,created=>fillManualCounterparties(created.id));
 
   function refreshCats(){
     const tipo = document.getElementById('mTipo').value;
