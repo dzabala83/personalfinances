@@ -853,6 +853,8 @@ const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 let cloudSnapshot = null;
 
 function migrateState(s){
+  if(!Array.isArray(s.contrapartes)) s.contrapartes=[];
+  (s.transactions||[]).forEach(t=>{if(!('contraparteId' in t))t.contraparteId=null;});
   (s.categories||[]).forEach(c=>{
     if(!c.subPresupuestos) c.subPresupuestos = {};
     if(typeof c.presupuesto !== 'number') c.presupuesto = 0;
@@ -871,8 +873,8 @@ function buildSeedState(){
   const subMap=new Map();
   categories.forEach(c=>c.subcategorias.forEach(name=>subMap.set(c.id+'|'+name,crypto.randomUUID())));
   const rules=SEED_RULES.map(r=>({id:crypto.randomUUID(),keyword:r.keyword,tipo:r.tipo,categoria:r.categoria,subcategoria:r.subcategoria}));
-  const transactions=SEED_TX.map(t=>({id:crypto.randomUUID(),fecha:t.fecha,descripcion:t.descripcion,monto:t.monto,tipo:t.tipo,categoria:t.categoria,subcategoria:t.subcategoria,cuenta:t.cuenta,origen:t.origen,estado:'categorizado',refId:null}));
-  return {categories,rules,transactions,seeded:true,seedImported:true};
+  const transactions=SEED_TX.map(t=>({id:crypto.randomUUID(),fecha:t.fecha,descripcion:t.descripcion,monto:t.monto,tipo:t.tipo,categoria:t.categoria,subcategoria:t.subcategoria,cuenta:t.cuenta,origen:t.origen,estado:'categorizado',refId:null,contraparteId:null}));
+  return {categories,rules,transactions,contrapartes:[],seeded:true,seedImported:true};
 }
 
 let state=null;
@@ -1228,9 +1230,12 @@ async function loadFromSupabase(){
   const categories=cats.map(c=>({id:c.id,tipo:c.tipo,nombre:c.nombre,subcategorias:(subByCat[c.id]||[]).map(s=>s.nombre),presupuesto:budgetByCat[c.id]?.direct||0,subPresupuestos:budgetByCat[c.id]?.subs||{}}));
   const catById=Object.fromEntries(categories.map(c=>[c.id,c]));
   const subNameById=Object.fromEntries((subs||[]).map(s=>[s.id,s.nombre]));
-  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null}));
+  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null,contraparteId:t.contraparte_id||null}));
+  const {data:contrapartes,error:counterpartiesError}=await supabaseClient.from('contrapartes').select('*').order('nombre');
+  if(counterpartiesError) throw counterpartiesError;
+  const counterparties=(contrapartes||[]).map(p=>({id:p.id,nombre:p.nombre,tipo:p.tipo,telefono:p.telefono||'',email:p.email||'',notas:p.notas||'',activo:p.activo!==false}));
   const rules2=(rules||[]).map(r=>({id:r.id,keyword:r.palabra_clave,tipo:r.categoria_id&&catById[r.categoria_id]?catById[r.categoria_id].tipo:'Gasto',categoria:catById[r.categoria_id]?.nombre||'',subcategoria:r.subcategoria_id?subNameById[r.subcategoria_id]||null:null}));
-  return {categories,rules:rules2,transactions,seeded:false,seedImported:true};
+  return {categories,rules:rules2,transactions,contrapartes:counterparties,seeded:false,seedImported:true};
 }
 
 async function setAppInitialized(value=true){
@@ -1378,6 +1383,13 @@ async function saveState(){
     // --- Transacciones: SOLO nuevas o modificadas ---
     const previousTx=cloudSnapshot?.transactions||[];
     const previousById=Object.fromEntries(previousTx.map(t=>[t.id,t]));
+    const counterpartRows=[];
+    for(const p of (state.contrapartes||[])){
+      if(!p.nombre||!p.nombre.trim()) continue;
+      if(!UUID_RE.test(p.id||'')) p.id=crypto.randomUUID();
+      counterpartRows.push({id:p.id,usuario_id:user_id,nombre:p.nombre.trim(),tipo:p.tipo||'Persona',telefono:p.telefono||null,email:p.email||null,notas:p.notas||null,activo:p.activo!==false,updated_at:new Date().toISOString()});
+    }
+    if(counterpartRows.length){const r=await supabaseClient.from('contrapartes').upsert(counterpartRows,{onConflict:'id'});if(r.error)throw r.error;}
     const txRows=[];
     const currentIds=new Set();
 
@@ -1391,7 +1403,7 @@ async function saveState(){
 
       const row={
         id,usuario_id:user_id,fecha:tx.fecha,descripcion:tx.descripcion,
-        monto:Number(tx.monto)||0,tipo:tx.tipo,
+        monto:Number(tx.monto)||0,tipo:tx.tipo,contraparte_id:tx.contraparteId||null,
         categoria_id:catByKey[tx.tipo+'|'+tx.categoria]||null,
         subcategoria_id:tx.subcategoria
           ? (subMap[(catByKey[tx.tipo+'|'+tx.categoria]||'')+'|'+tx.subcategoria]||null)
@@ -1404,10 +1416,10 @@ async function saveState(){
       if(!old || !same(
         {fecha:old.fecha,descripcion:old.descripcion,monto:Number(old.monto)||0,tipo:old.tipo,
          categoria:old.categoria,subcategoria:old.subcategoria,cuenta:old.cuenta,origen:old.origen,
-         estado:old.estado,refId:old.refId||null},
+         estado:old.estado,refId:old.refId||null,contraparteId:old.contraparteId||null},
         {fecha:tx.fecha,descripcion:tx.descripcion,monto:Number(tx.monto)||0,tipo:tx.tipo,
          categoria:tx.categoria,subcategoria:tx.subcategoria,cuenta:tx.cuenta,origen:tx.origen,
-         estado:tx.estado,refId:tx.refId||null}
+         estado:tx.estado,refId:tx.refId||null,contraparteId:tx.contraparteId||null}
       )){
         txRows.push(row);
       }
@@ -1650,6 +1662,7 @@ function syncUserChrome(){
 const TABS = [
   {id:'dashboard', label:'📊 Resumen'},
   {id:'transacciones', label:'📄 Transacciones'},
+  {id:'contrapartes', label:'👥 Contrapartes'},
   {id:'pendientes', label:'❓ Pendientes'},
   {id:'categorias', label:'🏷️ Categorías'},
   {id:'subir', label:'⬆️ Subir extracto'},
@@ -1678,8 +1691,8 @@ function renderNav(){
   const brand=document.createElement('div'); brand.className='nexo-sidebar-brand';
   brand.innerHTML='<div class="brand-main">NEXO</div><div class="brand-sub">FINANZAS</div>'; nav.appendChild(brand);
   const group=document.createElement('div'); group.className='nexo-nav-group';
-  const icons={dashboard:'⌂',transacciones:'▤',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
-  ['dashboard','transacciones','categorias','subir','pendientes'].forEach(id=>{
+  const icons={dashboard:'⌂',transacciones:'▤',contrapartes:'♙',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
+  ['dashboard','transacciones','contrapartes','categorias','subir','pendientes'].forEach(id=>{
     const tab=TABS.find(x=>x.id===id); if(!tab)return;
     const btn=document.createElement('button'); btn.dataset.tab=tab.id; btn.className=tab.id===currentTab?'active':'';
     const label=tab.label.replace(/^\S+\s*/,'');
@@ -1785,6 +1798,34 @@ function renderConfiguracion(app){
   app.appendChild(wrap);
 }
 
+function renderContrapartes(app){
+  const wrap=document.createElement('div');
+  const head=document.createElement('div');head.className='card';
+  head.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 5px">Contrapartes</h2><p style="margin:0;color:var(--muted);font-size:.88rem">Personas, comercios, empresas y servicios vinculados a tus movimientos.</p></div><button class="btn" id="addCounterparty">+ Nueva contraparte</button></div>';
+  wrap.appendChild(head);
+  const list=document.createElement('div');list.className='card';wrap.appendChild(list);
+  const rows=(state.contrapartes||[]).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  if(!rows.length) list.innerHTML='<div class="empty">Todavía no tienes contrapartes registradas.</div>';
+  else {
+    list.innerHTML='<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Contacto</th><th>Estado</th><th></th></tr></thead><tbody>'+rows.map(p=>'<tr><td><strong>'+escapeHtml(p.nombre)+'</strong></td><td>'+escapeHtml(p.tipo||'Persona')+'</td><td>'+escapeHtml(p.telefono||p.email||'—')+'</td><td><span class="pill '+(p.activo===false?'gasto':'ingreso')+'">'+(p.activo===false?'Inactiva':'Activa')+'</span></td><td><div class="row-actions"><button data-edit-cp="'+p.id+'">Editar</button><button data-toggle-cp="'+p.id+'">'+(p.activo===false?'Activar':'Desactivar')+'</button></div></td></tr>').join('')+'</tbody></table></div>';
+    list.querySelectorAll('[data-edit-cp]').forEach(b=>b.onclick=()=>openCounterpartyForm(b.dataset.editCp));
+    list.querySelectorAll('[data-toggle-cp]').forEach(b=>b.onclick=()=>{const p=state.contrapartes.find(x=>x.id===b.dataset.toggleCp);if(!p)return;p.activo=p.activo===false;saveState();render();showToast(p.activo?'Contraparte activada':'Contraparte desactivada');});
+  }
+  head.querySelector('#addCounterparty').onclick=()=>openCounterpartyForm();
+  app.appendChild(wrap);
+}
+function openCounterpartyForm(id){
+  const existing=(state.contrapartes||[]).find(p=>p.id===id);
+  const p=existing||{id:crypto.randomUUID(),nombre:'',tipo:'Persona',telefono:'',email:'',notas:'',activo:true};
+  const overlay=document.createElement('div');
+  overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:90;padding:16px';
+  overlay.innerHTML='<div class="card" style="max-width:460px;width:100%;max-height:90vh;overflow:auto"><h3 class="cat-title">'+(existing?'Editar contraparte':'Nueva contraparte')+'</h3><div class="field"><label>Nombre *</label><input id="cpNombre" type="text" placeholder="Ej. Juan Pérez"></div><div class="field"><label>Tipo</label><select id="cpTipo">'+['Persona','Negocio','Empresa','Comercio','Institución','Servicio','Otro'].map(t=>'<option value="'+t+'" '+(p.tipo===t?'selected':'')+'>'+t+'</option>').join('')+'</select></div><div class="grid2"><div class="field"><label>Teléfono</label><input id="cpTelefono" type="text"></div><div class="field"><label>Email</label><input id="cpEmail" type="text"></div></div><div class="field"><label>Notas</label><input id="cpNotas" type="text"></div><div class="row-actions" style="justify-content:flex-end"><button class="btn secondary" id="cpCancel">Cancelar</button><button class="btn" id="cpSave">Guardar</button></div></div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('#cpNombre').value=p.nombre||'';overlay.querySelector('#cpTelefono').value=p.telefono||'';overlay.querySelector('#cpEmail').value=p.email||'';overlay.querySelector('#cpNotas').value=p.notas||'';
+  overlay.querySelector('#cpCancel').onclick=()=>overlay.remove();
+  overlay.querySelector('#cpSave').onclick=()=>{const nombre=overlay.querySelector('#cpNombre').value.trim();if(!nombre){showToast('Escribe un nombre');return;}const values={id:p.id,nombre,tipo:overlay.querySelector('#cpTipo').value,telefono:overlay.querySelector('#cpTelefono').value.trim(),email:overlay.querySelector('#cpEmail').value.trim(),notas:overlay.querySelector('#cpNotas').value.trim(),activo:p.activo!==false};if(existing)Object.assign(existing,values);else(state.contrapartes||(state.contrapartes=[])).push(values);saveState();overlay.remove();render();showToast('Contraparte guardada');};
+}
+
 function render(){
   renderNav();
   const sub = document.getElementById('headerSub');
@@ -1797,6 +1838,7 @@ function render(){
   app.innerHTML = '';
   if(currentTab==='dashboard') renderDashboard(app);
   else if(currentTab==='transacciones') renderTransacciones(app);
+  else if(currentTab==='contrapartes') renderContrapartes(app);
   else if(currentTab==='pendientes') renderPendientes(app);
   else if(currentTab==='categorias') renderCategorias(app);
   else if(currentTab==='subir') renderSubir(app);
@@ -2337,11 +2379,14 @@ function openEditTransaction(txId){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${c.nombre}" ${c.nombre===tx.categoria?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
       <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
+      <div class="field"><label>Contraparte (opcional)</label><select id="eContraparte"><option value="">Sin contraparte</option></select></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;">
         <button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  const eContraparte=document.getElementById('eContraparte');
+  (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;if(p.id===(tx.contraparteId||''))o.selected=true;eContraparte.appendChild(o);});
   function refreshSubs(){
     const cat=getCategory(tx.tipo,document.getElementById('eCat').value);
     const subs=cat?.subcategorias||[];
@@ -2359,6 +2404,7 @@ function openEditTransaction(txId){
     tx.monto=monto;
     tx.categoria=document.getElementById('eCat').value;
     tx.subcategoria=document.getElementById('eSub').value||null;
+    tx.contraparteId=document.getElementById('eContraparte').value||null;
     const result=saveState();
     if(result && typeof result.then==='function') result.then(r=>{ if(r?.cloud===false) showToast('⚠️ No se pudo guardar en la nube'); else showToast('✅ Transacción actualizada'); });
     else showToast('Transacción actualizada');
@@ -2383,6 +2429,7 @@ function openManualForm(){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="mMonto" placeholder="0" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="mCat"></select></div>
       <div class="field"><label>Subcategoría</label><select id="mSub"><option value="">(ninguna)</option></select></div>
+      <div class="field"><label>Contraparte (opcional)</label><select id="mContraparte"><option value="">Sin contraparte</option></select></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;">
         <button class="btn secondary" id="mCancel">Cancelar</button>
         <button class="btn" id="mSave">Guardar</button>
@@ -2390,6 +2437,8 @@ function openManualForm(){
     </div>
   `;
   document.body.appendChild(overlay);
+  const mContraparte=document.getElementById('mContraparte');
+  (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;mContraparte.appendChild(o);});
 
   function refreshCats(){
     const tipo = document.getElementById('mTipo').value;
@@ -2420,6 +2469,7 @@ function openManualForm(){
       tipo: document.getElementById('mTipo').value,
       categoria: document.getElementById('mCat').value,
       subcategoria: document.getElementById('mSub').value || null,
+      contraparteId: document.getElementById('mContraparte').value || null,
       cuenta: 'Manual',
       origen: 'manual',
       estado: 'categorizado',
