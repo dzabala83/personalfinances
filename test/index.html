@@ -1231,9 +1231,16 @@ async function loadFromSupabase(){
   const catById=Object.fromEntries(categories.map(c=>[c.id,c]));
   const subNameById=Object.fromEntries((subs||[]).map(s=>[s.id,s.nombre]));
   const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null,contraparteId:t.contraparte_id||null}));
-  const {data:contrapartes,error:counterpartiesError}=await supabaseClient.from('contrapartes').select('*').order('nombre');
-  if(counterpartiesError) throw counterpartiesError;
+  const [{data:contrapartes,error:counterpartiesError},{data:assignments,error:assignmentsError}]=await Promise.all([
+    supabaseClient.from('contrapartes').select('*').order('nombre'),
+    supabaseClient.from('transaccion_contrapartes').select('*')
+  ]);
+  if(counterpartiesError) throw counterpartyError;
+  if(assignmentsError) throw assignmentsError;
   const counterparties=(contrapartes||[]).map(p=>({id:p.id,nombre:p.nombre,tipo:p.tipo,telefono:p.telefono||'',email:p.email||'',notas:p.notas||'',activo:p.activo!==false}));
+  const assignmentByTx={};
+  (assignments||[]).forEach(a=>{(assignmentByTx[a.transaccion_id]||(assignmentByTx[a.transaccion_id]=[])).push({contraparteId:a.contraparte_id,monto:Number(a.monto_asignado)||0,tipoParticipacion:a.tipo_participacion||'DEBE_REEMBOLSAR'});});
+  transactions.forEach(t=>{t.contrapartesAsignadas=assignmentByTx[t.id]|| (t.contraparteId?[{contraparteId:t.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[]);});
   const rules2=(rules||[]).map(r=>({id:r.id,keyword:r.palabra_clave,tipo:r.categoria_id&&catById[r.categoria_id]?catById[r.categoria_id].tipo:'Gasto',categoria:catById[r.categoria_id]?.nombre||'',subcategoria:r.subcategoria_id?subNameById[r.subcategoria_id]||null:null}));
   return {categories,rules:rules2,transactions,contrapartes:counterparties,seeded:false,seedImported:true};
 }
@@ -1428,6 +1435,17 @@ async function saveState(){
     if(txRows.length){
       const r=await supabaseClient.from('transacciones').upsert(txRows,{onConflict:'id'});
       if(r.error) throw r.error;
+    }
+    // Reemplaza las asignaciones de contraparte para las transacciones guardadas.
+    for(const tx of (state.transactions||[])){
+      if(!UUID_RE.test(tx.id||'')) continue;
+      const del=await supabaseClient.from('transaccion_contrapartes').delete().eq('transaccion_id',tx.id).eq('usuario_id',user_id);
+      if(del.error) throw del.error;
+      const assignments=(tx.contrapartesAsignadas||[]).filter(a=>a.contraparteId && (state.contrapartes||[]).some(p=>p.id===a.contraparteId)).map(a=>({
+        usuario_id:user_id,transaccion_id:tx.id,contraparte_id:a.contraparteId,
+        tipo_participacion:a.tipoParticipacion||'DEBE_REEMBOLSAR',monto_asignado:Number(a.monto)||0
+      }));
+      if(assignments.length){const ins=await supabaseClient.from('transaccion_contrapartes').insert(assignments);if(ins.error)throw ins.error;}
     }
 
     // Si ya tenemos una foto fiable de la nube, eliminamos SOLO transacciones
@@ -2379,16 +2397,17 @@ function openEditTransaction(txId){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${c.nombre}" ${c.nombre===tx.categoria?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
       <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
-      <div class="field"><label>Contraparte (opcional)</label><div style="display:flex;gap:8px"><select id="eContraparte" style="flex:1"><option value="">Sin contraparte</option></select><button type="button" class="btn secondary" id="eNewContraparte">+ Crear</button></div><small style="color:var(--muted)">Asocia esta transacción a una persona, negocio o servicio.</small></div>
+      <div class="field"><label>Personas involucradas</label><div id="eCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="eNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;">
         <button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   const eContraparte=document.getElementById('eContraparte');
-  const fillEditCounterparties=(selectedId)=>{eContraparte.innerHTML='<option value="">Sin contraparte</option>'; (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;if(p.id===(selectedId||''))o.selected=true;eContraparte.appendChild(o);});};
-  fillEditCounterparties(tx.contraparteId);
-  document.getElementById('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>fillEditCounterparties(created.id));
+  const editAssignments=(tx.contrapartesAsignadas|| (tx.contraparteId?[{contraparteId:tx.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[])).map(a=>({...a}));
+  const renderEditAssignments=()=>{const box=document.getElementById('eCounterparties');box.innerHTML='';(state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const selected=editAssignments.find(a=>a.contraparteId===p.id);const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 105px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]');check.onchange=()=>{const ix=editAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)editAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)editAssignments.splice(ix,1);amount.disabled=!check.checked;};amount.oninput=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};box.appendChild(row);});};
+  renderEditAssignments();
+  document.getElementById('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{editAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderEditAssignments();});
   function refreshSubs(){
     const cat=getCategory(tx.tipo,document.getElementById('eCat').value);
     const subs=cat?.subcategorias||[];
@@ -2406,7 +2425,8 @@ function openEditTransaction(txId){
     tx.monto=monto;
     tx.categoria=document.getElementById('eCat').value;
     tx.subcategoria=document.getElementById('eSub').value||null;
-    tx.contraparteId=document.getElementById('eContraparte').value||null;
+    tx.contrapartesAsignadas=editAssignments.slice();
+    tx.contraparteId=editAssignments[0]?.contraparteId||null;
     const result=saveState();
     if(result && typeof result.then==='function') result.then(r=>{ if(r?.cloud===false) showToast('⚠️ No se pudo guardar en la nube'); else showToast('✅ Transacción actualizada'); });
     else showToast('Transacción actualizada');
@@ -2431,7 +2451,7 @@ function openManualForm(){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="mMonto" placeholder="0" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="mCat"></select></div>
       <div class="field"><label>Subcategoría</label><select id="mSub"><option value="">(ninguna)</option></select></div>
-      <div class="field"><label>Contraparte (opcional)</label><div style="display:flex;gap:8px"><select id="mContraparte" style="flex:1"><option value="">Sin contraparte</option></select><button type="button" class="btn secondary" id="mNewContraparte">+ Crear</button></div><small style="color:var(--muted)">Asocia este movimiento a una persona, negocio o servicio.</small></div>
+      <div class="field"><label>Personas involucradas</label><div id="mCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="mNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;">
         <button class="btn secondary" id="mCancel">Cancelar</button>
         <button class="btn" id="mSave">Guardar</button>
@@ -2440,9 +2460,10 @@ function openManualForm(){
   `;
   document.body.appendChild(overlay);
   const mContraparte=document.getElementById('mContraparte');
-  const fillManualCounterparties=(selectedId)=>{mContraparte.innerHTML='<option value="">Sin contraparte</option>'; (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.nombre+' · '+p.tipo;if(p.id===(selectedId||''))o.selected=true;mContraparte.appendChild(o);});};
-  fillManualCounterparties();
-  document.getElementById('mNewContraparte').onclick=()=>openCounterpartyForm(null,created=>fillManualCounterparties(created.id));
+  const manualAssignments=[];
+  const renderManualAssignments=()=>{const box=document.getElementById('mCounterparties');box.innerHTML='';(state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const selected=manualAssignments.find(a=>a.contraparteId===p.id);const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 105px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]');check.onchange=()=>{const ix=manualAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)manualAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)manualAssignments.splice(ix,1);amount.disabled=!check.checked;};amount.oninput=()=>{const a=manualAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};box.appendChild(row);});};
+  renderManualAssignments();
+  document.getElementById('mNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{manualAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderManualAssignments();});
 
   function refreshCats(){
     const tipo = document.getElementById('mTipo').value;
@@ -2473,7 +2494,8 @@ function openManualForm(){
       tipo: document.getElementById('mTipo').value,
       categoria: document.getElementById('mCat').value,
       subcategoria: document.getElementById('mSub').value || null,
-      contraparteId: document.getElementById('mContraparte').value || null,
+      contraparteId: manualAssignments[0]?.contraparteId||null,
+      contrapartesAsignadas: manualAssignments.slice(),
       cuenta: 'Manual',
       origen: 'manual',
       estado: 'categorizado',
