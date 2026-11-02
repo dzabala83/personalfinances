@@ -2378,7 +2378,7 @@ function renderTransacciones(app){
     card.appendChild(mobileList);
 
     const editHandler=id=>openEditTransaction(id);
-    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);if(tx.metadata?.kind==='counterparty_settlement'){try{if(currentUser){const [a,b]=await Promise.all([supabaseClient.from('transacciones').delete().eq('id',tx.id).eq('usuario_id',currentUser.id),supabaseClient.from('transaccion_contrapartes').delete().eq('transaccion_id',tx.id).eq('usuario_id',currentUser.id)]);if(a.error)throw a.error;if(b.error)throw b.error;}cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};cloudSnapshot.transactions=cloudSnapshot.transactions.filter(t=>t.id!==tx.id);saveLocal();}catch(err){state.transactions=original;saveLocal();throw err;}}else{const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
+    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);if(tx.metadata?.kind==='counterparty_settlement'){try{if(currentUser){const result=await supabaseClient.from('transacciones').delete().eq('id',tx.id).eq('usuario_id',currentUser.id);if(result.error)throw result.error;}cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};cloudSnapshot.transactions=cloudSnapshot.transactions.filter(t=>t.id!==tx.id);saveLocal();}catch(err){state.transactions=original;saveLocal();throw err;}}else{const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
     card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.edit));
     card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.del));
     card.querySelectorAll('[data-mobile-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.mobileEdit));
@@ -2772,7 +2772,7 @@ function showDeleteTransactionModal(tx, onConfirm){
     confirm.disabled=false;
     confirm.style.opacity='1';
     confirm.style.cursor='pointer';
-    overlay.querySelector('[style*="Debes esperar 10 segundos"]').textContent='Confirma únicamente si deseas eliminar esta devolución.';
+    overlay.querySelector('[style*="rgba(220,38,38,.09)"]').textContent='Confirma únicamente si deseas eliminar esta devolución.';
   }
   const close=()=>{ clearInterval(timer); overlay.remove(); };
   cancel.onclick=close;
