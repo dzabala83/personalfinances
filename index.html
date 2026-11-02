@@ -773,7 +773,6 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
 })();
 </script></head>
 <body>
-
 <div id="authGate" class="nexo-auth-gate">
   <div class="nexo-login">
     <div class="nexo-brand">
@@ -852,6 +851,8 @@ const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 let cloudSnapshot = null;
 
 function migrateState(s){
+  if(!Array.isArray(s.contrapartes)) s.contrapartes=[];
+  (s.transactions||[]).forEach(t=>{if(!('contraparteId' in t))t.contraparteId=null;});
   (s.categories||[]).forEach(c=>{
     if(!c.subPresupuestos) c.subPresupuestos = {};
     if(typeof c.presupuesto !== 'number') c.presupuesto = 0;
@@ -870,8 +871,8 @@ function buildSeedState(){
   const subMap=new Map();
   categories.forEach(c=>c.subcategorias.forEach(name=>subMap.set(c.id+'|'+name,crypto.randomUUID())));
   const rules=SEED_RULES.map(r=>({id:crypto.randomUUID(),keyword:r.keyword,tipo:r.tipo,categoria:r.categoria,subcategoria:r.subcategoria}));
-  const transactions=SEED_TX.map(t=>({id:crypto.randomUUID(),fecha:t.fecha,descripcion:t.descripcion,monto:t.monto,tipo:t.tipo,categoria:t.categoria,subcategoria:t.subcategoria,cuenta:t.cuenta,origen:t.origen,estado:'categorizado',refId:null}));
-  return {categories,rules,transactions,seeded:true,seedImported:true};
+  const transactions=SEED_TX.map(t=>({id:crypto.randomUUID(),fecha:t.fecha,descripcion:t.descripcion,monto:t.monto,tipo:t.tipo,categoria:t.categoria,subcategoria:t.subcategoria,cuenta:t.cuenta,origen:t.origen,estado:'categorizado',refId:null,contraparteId:null}));
+  return {categories,rules,transactions,contrapartes:[],seeded:true,seedImported:true};
 }
 
 let state=null;
@@ -1227,9 +1228,19 @@ async function loadFromSupabase(){
   const categories=cats.map(c=>({id:c.id,tipo:c.tipo,nombre:c.nombre,subcategorias:(subByCat[c.id]||[]).map(s=>s.nombre),presupuesto:budgetByCat[c.id]?.direct||0,subPresupuestos:budgetByCat[c.id]?.subs||{}}));
   const catById=Object.fromEntries(categories.map(c=>[c.id,c]));
   const subNameById=Object.fromEntries((subs||[]).map(s=>[s.id,s.nombre]));
-  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null}));
+  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null,contraparteId:t.contraparte_id||null}));
+  const [{data:contrapartes,error:counterpartiesError},{data:assignments,error:assignmentsError}]=await Promise.all([
+    supabaseClient.from('contrapartes').select('*').order('nombre'),
+    supabaseClient.from('transaccion_contrapartes').select('*')
+  ]);
+  if(counterpartiesError) throw counterpartiesError;
+  if(assignmentsError) throw assignmentsError;
+  const counterparties=(contrapartes||[]).map(p=>({id:p.id,nombre:p.nombre,tipo:p.tipo,telefono:p.telefono||'',email:p.email||'',notas:p.notas||'',activo:p.activo!==false}));
+  const assignmentByTx={};
+  (assignments||[]).forEach(a=>{(assignmentByTx[a.transaccion_id]||(assignmentByTx[a.transaccion_id]=[])).push({contraparteId:a.contraparte_id,monto:Number(a.monto_asignado)||0,tipoParticipacion:a.tipo_participacion||'DEBE_REEMBOLSAR'});});
+  transactions.forEach(t=>{t.contrapartesAsignadas=assignmentByTx[t.id]|| (t.contraparteId?[{contraparteId:t.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[]);});
   const rules2=(rules||[]).map(r=>({id:r.id,keyword:r.palabra_clave,tipo:r.categoria_id&&catById[r.categoria_id]?catById[r.categoria_id].tipo:'Gasto',categoria:catById[r.categoria_id]?.nombre||'',subcategoria:r.subcategoria_id?subNameById[r.subcategoria_id]||null:null}));
-  return {categories,rules:rules2,transactions,seeded:false,seedImported:true};
+  return {categories,rules:rules2,transactions,contrapartes:counterparties,seeded:false,seedImported:true};
 }
 
 async function setAppInitialized(value=true){
@@ -1377,6 +1388,13 @@ async function saveState(){
     // --- Transacciones: SOLO nuevas o modificadas ---
     const previousTx=cloudSnapshot?.transactions||[];
     const previousById=Object.fromEntries(previousTx.map(t=>[t.id,t]));
+    const counterpartRows=[];
+    for(const p of (state.contrapartes||[])){
+      if(!p.nombre||!p.nombre.trim()) continue;
+      if(!UUID_RE.test(p.id||'')) p.id=crypto.randomUUID();
+      counterpartRows.push({id:p.id,usuario_id:user_id,nombre:p.nombre.trim(),tipo:p.tipo||'Persona',telefono:p.telefono||null,email:p.email||null,notas:p.notas||null,activo:p.activo!==false,updated_at:new Date().toISOString()});
+    }
+    if(counterpartRows.length){const r=await supabaseClient.from('contrapartes').upsert(counterpartRows,{onConflict:'id'});if(r.error)throw r.error;}
     const txRows=[];
     const currentIds=new Set();
 
@@ -1390,7 +1408,7 @@ async function saveState(){
 
       const row={
         id,usuario_id:user_id,fecha:tx.fecha,descripcion:tx.descripcion,
-        monto:Number(tx.monto)||0,tipo:tx.tipo,
+        monto:Number(tx.monto)||0,tipo:tx.tipo,contraparte_id:tx.contraparteId||null,
         categoria_id:catByKey[tx.tipo+'|'+tx.categoria]||null,
         subcategoria_id:tx.subcategoria
           ? (subMap[(catByKey[tx.tipo+'|'+tx.categoria]||'')+'|'+tx.subcategoria]||null)
@@ -1403,10 +1421,10 @@ async function saveState(){
       if(!old || !same(
         {fecha:old.fecha,descripcion:old.descripcion,monto:Number(old.monto)||0,tipo:old.tipo,
          categoria:old.categoria,subcategoria:old.subcategoria,cuenta:old.cuenta,origen:old.origen,
-         estado:old.estado,refId:old.refId||null},
+         estado:old.estado,refId:old.refId||null,contraparteId:old.contraparteId||null},
         {fecha:tx.fecha,descripcion:tx.descripcion,monto:Number(tx.monto)||0,tipo:tx.tipo,
          categoria:tx.categoria,subcategoria:tx.subcategoria,cuenta:tx.cuenta,origen:tx.origen,
-         estado:tx.estado,refId:tx.refId||null}
+         estado:tx.estado,refId:tx.refId||null,contraparteId:tx.contraparteId||null}
       )){
         txRows.push(row);
       }
@@ -1415,6 +1433,17 @@ async function saveState(){
     if(txRows.length){
       const r=await supabaseClient.from('transacciones').upsert(txRows,{onConflict:'id'});
       if(r.error) throw r.error;
+    }
+    // Reemplaza las asignaciones de contraparte para las transacciones guardadas.
+    for(const tx of (state.transactions||[])){
+      if(!UUID_RE.test(tx.id||'')) continue;
+      const del=await supabaseClient.from('transaccion_contrapartes').delete().eq('transaccion_id',tx.id).eq('usuario_id',user_id);
+      if(del.error) throw del.error;
+      const assignments=(tx.contrapartesAsignadas||[]).filter(a=>a.contraparteId && (state.contrapartes||[]).some(p=>p.id===a.contraparteId)).map(a=>({
+        usuario_id:user_id,transaccion_id:tx.id,contraparte_id:a.contraparteId,
+        tipo_participacion:a.tipoParticipacion||'DEBE_REEMBOLSAR',monto_asignado:Number(a.monto)||0
+      }));
+      if(assignments.length){const ins=await supabaseClient.from('transaccion_contrapartes').insert(assignments);if(ins.error)throw ins.error;}
     }
 
     // Si ya tenemos una foto fiable de la nube, eliminamos SOLO transacciones
@@ -1649,6 +1678,7 @@ function syncUserChrome(){
 const TABS = [
   {id:'dashboard', label:'📊 Resumen'},
   {id:'transacciones', label:'📄 Transacciones'},
+  {id:'contrapartes', label:'👥 Contrapartes'},
   {id:'pendientes', label:'❓ Pendientes'},
   {id:'categorias', label:'🏷️ Categorías'},
   {id:'subir', label:'⬆️ Subir extracto'},
@@ -1677,8 +1707,8 @@ function renderNav(){
   const brand=document.createElement('div'); brand.className='nexo-sidebar-brand';
   brand.innerHTML='<div class="brand-main">NEXO</div><div class="brand-sub">FINANZAS</div>'; nav.appendChild(brand);
   const group=document.createElement('div'); group.className='nexo-nav-group';
-  const icons={dashboard:'⌂',transacciones:'▤',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
-  ['dashboard','transacciones','categorias','subir','pendientes'].forEach(id=>{
+  const icons={dashboard:'⌂',transacciones:'▤',contrapartes:'♙',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
+  ['dashboard','transacciones','contrapartes','categorias','subir','pendientes'].forEach(id=>{
     const tab=TABS.find(x=>x.id===id); if(!tab)return;
     const btn=document.createElement('button'); btn.dataset.tab=tab.id; btn.className=tab.id===currentTab?'active':'';
     const label=tab.label.replace(/^\S+\s*/,'');
@@ -1784,6 +1814,34 @@ function renderConfiguracion(app){
   app.appendChild(wrap);
 }
 
+function renderContrapartes(app){
+  const wrap=document.createElement('div');
+  const head=document.createElement('div');head.className='card';
+  head.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 5px">Contrapartes</h2><p style="margin:0;color:var(--muted);font-size:.88rem">Personas, comercios, empresas y servicios vinculados a tus movimientos.</p></div><button class="btn" id="addCounterparty">+ Nueva contraparte</button></div>';
+  wrap.appendChild(head);
+  const list=document.createElement('div');list.className='card';wrap.appendChild(list);
+  const rows=(state.contrapartes||[]).slice().sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  if(!rows.length) list.innerHTML='<div class="empty">Todavía no tienes contrapartes registradas.</div>';
+  else {
+    list.innerHTML='<div class="table-wrap"><table><thead><tr><th>Nombre</th><th>Tipo</th><th>Contacto</th><th>Estado</th><th></th></tr></thead><tbody>'+rows.map(p=>'<tr><td><strong>'+escapeHtml(p.nombre)+'</strong></td><td>'+escapeHtml(p.tipo||'Persona')+'</td><td>'+escapeHtml(p.telefono||p.email||'—')+'</td><td><span class="pill '+(p.activo===false?'gasto':'ingreso')+'">'+(p.activo===false?'Inactiva':'Activa')+'</span></td><td><div class="row-actions"><button data-edit-cp="'+p.id+'">Editar</button><button data-toggle-cp="'+p.id+'">'+(p.activo===false?'Activar':'Desactivar')+'</button></div></td></tr>').join('')+'</tbody></table></div>';
+    list.querySelectorAll('[data-edit-cp]').forEach(b=>b.onclick=()=>openCounterpartyForm(b.dataset.editCp));
+    list.querySelectorAll('[data-toggle-cp]').forEach(b=>b.onclick=()=>{const p=state.contrapartes.find(x=>x.id===b.dataset.toggleCp);if(!p)return;p.activo=p.activo===false;saveState();render();showToast(p.activo?'Contraparte activada':'Contraparte desactivada');});
+  }
+  head.querySelector('#addCounterparty').onclick=()=>openCounterpartyForm();
+  app.appendChild(wrap);
+}
+function openCounterpartyForm(id,onCreated){
+  const existing=(state.contrapartes||[]).find(p=>p.id===id);
+  const p=existing||{id:crypto.randomUUID(),nombre:'',tipo:'Persona',telefono:'',email:'',notas:'',activo:true};
+  const overlay=document.createElement('div');
+  overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:90;padding:16px';
+  overlay.innerHTML='<div class="card" style="max-width:460px;width:100%;max-height:90vh;overflow:auto"><h3 class="cat-title">'+(existing?'Editar contraparte':'Nueva contraparte')+'</h3><div class="field"><label>Nombre *</label><input id="cpNombre" type="text" placeholder="Ej. Juan Pérez"></div><div class="field"><label>Tipo</label><select id="cpTipo">'+['Persona','Negocio','Empresa','Comercio','Institución','Servicio','Otro'].map(t=>'<option value="'+t+'" '+(p.tipo===t?'selected':'')+'>'+t+'</option>').join('')+'</select></div><div class="grid2"><div class="field"><label>Teléfono</label><input id="cpTelefono" type="text"></div><div class="field"><label>Email</label><input id="cpEmail" type="text"></div></div><div class="field"><label>Notas</label><input id="cpNotas" type="text"></div><div class="row-actions" style="justify-content:flex-end"><button class="btn secondary" id="cpCancel">Cancelar</button><button class="btn" id="cpSave">Guardar</button></div></div>';
+  document.body.appendChild(overlay);
+  overlay.querySelector('#cpNombre').value=p.nombre||'';overlay.querySelector('#cpTelefono').value=p.telefono||'';overlay.querySelector('#cpEmail').value=p.email||'';overlay.querySelector('#cpNotas').value=p.notas||'';
+  overlay.querySelector('#cpCancel').onclick=()=>overlay.remove();
+  overlay.querySelector('#cpSave').onclick=()=>{const nombre=overlay.querySelector('#cpNombre').value.trim();if(!nombre){showToast('Escribe un nombre');return;}const values={id:p.id,nombre,tipo:overlay.querySelector('#cpTipo').value,telefono:overlay.querySelector('#cpTelefono').value.trim(),email:overlay.querySelector('#cpEmail').value.trim(),notas:overlay.querySelector('#cpNotas').value.trim(),activo:p.activo!==false};if(existing)Object.assign(existing,values);else(state.contrapartes||(state.contrapartes=[])).push(values);saveState();overlay.remove();if(!existing&&typeof onCreated==='function')onCreated(values);render();showToast('Contraparte guardada');};
+}
+
 function render(){
   renderNav();
   const sub = document.getElementById('headerSub');
@@ -1796,6 +1854,7 @@ function render(){
   app.innerHTML = '';
   if(currentTab==='dashboard') renderDashboard(app);
   else if(currentTab==='transacciones') renderTransacciones(app);
+  else if(currentTab==='contrapartes') renderContrapartes(app);
   else if(currentTab==='pendientes') renderPendientes(app);
   else if(currentTab==='categorias') renderCategorias(app);
   else if(currentTab==='subir') renderSubir(app);
@@ -2278,8 +2337,8 @@ function renderTransacciones(app){
     }
     card.appendChild(count);
 
-    let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
-    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
+    let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Contraparte</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
+    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td>${escapeHtml((t.contrapartesAsignadas||[]).map(a=>(state.contrapartes||[]).find(p=>p.id===a.contraparteId)?.nombre).filter(Boolean).join(', ')||(state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'—')}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
     html+='</tbody></table></div>';
 
     const mobileList=document.createElement('div');
@@ -2291,7 +2350,7 @@ function renderTransacciones(app){
       const day=Number.isNaN(d.getTime())?(t.fecha||'').slice(-2):String(d.getDate()).padStart(2,'0');
       const item=document.createElement('div');
       item.className='tx-mobile-card '+(gasto?'gasto':'ingreso');
-      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
+      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-cat">👤 ${escapeHtml((t.contrapartesAsignadas||[]).map(a=>(state.contrapartes||[]).find(p=>p.id===a.contraparteId)?.nombre).filter(Boolean).join(', ')||(state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'Sin contraparte')}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
       item.querySelector('.tx-mobile-desc').textContent=t.descripcion||'Sin descripción';
       item.querySelector('.tx-mobile-sub').textContent=t.categoria?(t.categoria+(t.subcategoria?' / '+t.subcategoria:'')):'Sin categoría';
       mobileList.appendChild(item);
@@ -2336,11 +2395,17 @@ function openEditTransaction(txId){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${c.nombre}" ${c.nombre===tx.categoria?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
       <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
+      <div class="field"><label>Personas involucradas</label><div id="eCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="eNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;">
         <button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  const eContraparte=document.getElementById('eContraparte');
+  const editAssignments=(tx.contrapartesAsignadas|| (tx.contraparteId?[{contraparteId:tx.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[])).map(a=>({...a}));
+  const renderEditAssignments=()=>{const box=document.getElementById('eCounterparties');box.innerHTML='';(state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const selected=editAssignments.find(a=>a.contraparteId===p.id);const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 105px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]');check.onchange=()=>{const ix=editAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)editAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)editAssignments.splice(ix,1);amount.disabled=!check.checked;};amount.oninput=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};box.appendChild(row);});};
+  renderEditAssignments();
+  document.getElementById('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{editAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderEditAssignments();});
   function refreshSubs(){
     const cat=getCategory(tx.tipo,document.getElementById('eCat').value);
     const subs=cat?.subcategorias||[];
@@ -2358,6 +2423,12 @@ function openEditTransaction(txId){
     tx.monto=monto;
     tx.categoria=document.getElementById('eCat').value;
     tx.subcategoria=document.getElementById('eSub').value||null;
+    const invalidEdit=editAssignments.find(a=>!Number.isFinite(Number(a.monto))||Number(a.monto)<=0);
+    const allocatedEdit=editAssignments.reduce((sum,a)=>sum+(Number(a.monto)||0),0);
+    if(invalidEdit){showToast('Indica un importe mayor a cero para cada contraparte');return;}
+    if(allocatedEdit>monto+0.001){showToast('La suma de los reembolsos no puede superar el monto de la transacción');return;}
+    tx.contrapartesAsignadas=editAssignments.map(a=>({...a,monto:Number(a.monto)}));
+    tx.contraparteId=editAssignments[0]?.contraparteId||null;
     const result=saveState();
     if(result && typeof result.then==='function') result.then(r=>{ if(r?.cloud===false) showToast('⚠️ No se pudo guardar en la nube'); else showToast('✅ Transacción actualizada'); });
     else showToast('Transacción actualizada');
@@ -2382,6 +2453,7 @@ function openManualForm(){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="mMonto" placeholder="0" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="mCat"></select></div>
       <div class="field"><label>Subcategoría</label><select id="mSub"><option value="">(ninguna)</option></select></div>
+      <div class="field"><label>Personas involucradas</label><div id="mCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="mNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;">
         <button class="btn secondary" id="mCancel">Cancelar</button>
         <button class="btn" id="mSave">Guardar</button>
@@ -2389,6 +2461,11 @@ function openManualForm(){
     </div>
   `;
   document.body.appendChild(overlay);
+  const mContraparte=document.getElementById('mContraparte');
+  const manualAssignments=[];
+  const renderManualAssignments=()=>{const box=document.getElementById('mCounterparties');box.innerHTML='';(state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const selected=manualAssignments.find(a=>a.contraparteId===p.id);const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 105px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]');check.onchange=()=>{const ix=manualAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)manualAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)manualAssignments.splice(ix,1);amount.disabled=!check.checked;};amount.oninput=()=>{const a=manualAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};box.appendChild(row);});};
+  renderManualAssignments();
+  document.getElementById('mNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{manualAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderManualAssignments();});
 
   function refreshCats(){
     const tipo = document.getElementById('mTipo').value;
@@ -2411,6 +2488,10 @@ function openManualForm(){
   document.getElementById('mSave').onclick = ()=>{
     const monto = parseAmount(document.getElementById('mMonto').value);
     if(!monto || monto<=0){ showToast('Ingresa un monto válido'); return; }
+    const invalidManual=manualAssignments.find(a=>!Number.isFinite(Number(a.monto))||Number(a.monto)<=0);
+    const allocatedManual=manualAssignments.reduce((sum,a)=>sum+(Number(a.monto)||0),0);
+    if(invalidManual){showToast('Indica un importe mayor a cero para cada contraparte');return;}
+    if(allocatedManual>monto+0.001){showToast('La suma de los reembolsos no puede superar el monto de la transacción');return;}
     state.transactions.push({
       id: uid('tx'),
       fecha: document.getElementById('mFecha').value,
@@ -2419,6 +2500,8 @@ function openManualForm(){
       tipo: document.getElementById('mTipo').value,
       categoria: document.getElementById('mCat').value,
       subcategoria: document.getElementById('mSub').value || null,
+      contraparteId: manualAssignments[0]?.contraparteId||null,
+      contrapartesAsignadas: manualAssignments.map(a=>({...a,monto:Number(a.monto)})),
       cuenta: 'Manual',
       origen: 'manual',
       estado: 'categorizado',
