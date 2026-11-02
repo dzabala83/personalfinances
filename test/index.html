@@ -1883,8 +1883,8 @@ function renderDashboardMobile(app){
   wrap.className='mobile-summary-shell';
 
   const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
-  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+Number(t.monto||0),0);
-  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+Number(t.monto||0),0);
+  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+Number(t.monto||0),0);
 
   const monthNav=document.createElement('div');
   monthNav.className='mobile-month-control';
@@ -1917,7 +1917,7 @@ function renderDashboardMobile(app){
     .filter(c=>c.tipo==='Gasto')
     .map(c=>{
       const budget=Number(categoryBudget(c))||0;
-      const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((sum,t)=>sum+Number(t.monto||0),0);
+      const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement'&&t.categoria===c.nombre).reduce((sum,t)=>sum+Number(t.monto||0),0);
       return {c,budget,spent};
     })
     .filter(x=>x.spent!==0||x.budget!==0)
@@ -2013,8 +2013,8 @@ function renderDashboard(app){
   if(window.innerWidth<=600){renderDashboardMobile(app);return;}
   const wrap=document.createElement('div');wrap.className='approved-dashboard';
   const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
-  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto||0),0);
-  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0);
+  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((s,t)=>s+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((s,t)=>s+Number(t.monto||0),0);
   const balance=ingresos-gastos;
   const gastoCats=state.categories.filter(c=>c.tipo==='Gasto');
   const totalBudget=gastoCats.reduce((s,c)=>s+Number(categoryBudget(c)||0),0);
@@ -2052,10 +2052,10 @@ function renderDashboard(app){
 
   const months=[];for(let i=5;i>=0;i--)months.push(shiftMonth(currentMonth,-i));
   const monthNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const evolutionIncome=months.map(k=>state.transactions.filter(t=>monthKey(t.fecha)===k&&t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto||0),0));
-  const evolutionExpense=months.map(k=>state.transactions.filter(t=>monthKey(t.fecha)===k&&t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0));
+  const evolutionIncome=months.map(k=>state.transactions.filter(t=>monthKey(t.fecha)===k&&t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((s,t)=>s+Number(t.monto||0),0));
+  const evolutionExpense=months.map(k=>state.transactions.filter(t=>monthKey(t.fecha)===k&&t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((s,t)=>s+Number(t.monto||0),0));
 
-  const byCat={};txMonth.filter(t=>t.tipo==='Gasto').forEach(t=>{byCat[t.categoria]=(byCat[t.categoria]||0)+Number(t.monto||0);});
+  const byCat={};txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').forEach(t=>{byCat[t.categoria]=(byCat[t.categoria]||0)+Number(t.monto||0);});
   const catEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const palette=['#2385ee','#20ad78','#f5b72f','#ef646d','#8958df','#58a8e8','#a6afc1','#e07b32','#5f6fd7','#27a5a0'];
   const totalCat=catEntries.reduce((s,x)=>s+x[1],0);
 
@@ -2065,7 +2065,7 @@ function renderDashboard(app){
   const top10Total=txMonth.reduce((s,t)=>s+(Number(t.monto||0)>0?Number(t.monto||0):0),0);
   const top10Max=top10.length?Number(top10[0].monto||0):0;
   const top10Tone=(t)=>{
-    if(t.tipo==='Ingreso') return 'green';
+    if(t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement') return 'green';
     const c=t.categoria||'';
     if(c==='Vivienda'||c==='Deudas') return 'red';
     if(c==='Ahorros') return 'purple';
@@ -2085,7 +2085,7 @@ function renderDashboard(app){
         const row=document.createElement('div');row.className='approved-top10-row';
         const date=t.fecha?new Date(t.fecha+'T12:00:00'):null;
         const dateText=date?date.toLocaleDateString('es-BO',{day:'2-digit',month:'short',year:'numeric'}).replace(/ de /g,' '):'';
-        const typeLabel=t.tipo==='Ingreso'?'Ingreso':(t.categoria||'Gasto');
+        const typeLabel=t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement'?'Ingreso':(t.categoria||'Gasto');
         row.innerHTML='<div class="approved-top10-rank">'+(i+1)+'</div>'+
           '<div class="approved-top10-icon '+tone+'">'+(catIcons[t.categoria]||'▣')+'</div>'+
           '<div class="approved-top10-info"><div class="approved-top10-desc">'+escapeHtml(t.descripcion||'Sin descripción')+'</div><div class="approved-top10-meta">'+escapeHtml(typeLabel)+' · '+escapeHtml(dateText)+'</div></div>'+
@@ -2098,7 +2098,7 @@ function renderDashboard(app){
   document.getElementById('approvedViewAll').onclick=()=>{currentTab='transacciones';render();};
 
   const budgetList=document.getElementById('approvedBudgetList');
-  const budgetRows=gastoCats.map(c=>{const budget=Number(categoryBudget(c)||0);const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.categoria===c.nombre).reduce((s,t)=>s+Number(t.monto||0),0);return{c,budget,spent};}).filter(x=>x.budget>0||x.spent>0).sort((a,b)=>b.spent-a.spent).slice(0,7);
+  const budgetRows=gastoCats.map(c=>{const budget=Number(categoryBudget(c)||0);const spent=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement'&&t.categoria===c.nombre).reduce((s,t)=>s+Number(t.monto||0),0);return{c,budget,spent};}).filter(x=>x.budget>0||x.spent>0).sort((a,b)=>b.spent-a.spent).slice(0,7);
   if(!budgetRows.length)budgetList.innerHTML='<div class="approved-empty">Aún no tienes presupuestos registrados.</div>';
   budgetRows.forEach((x,i)=>{const pct=x.budget>0?Math.min(x.spent/x.budget*100,100):100;const fill=x.budget>0&&x.spent/x.budget>=1?'#ef5b63':x.budget>0&&x.spent/x.budget>=.9?'#f2b62f':palette[i%palette.length];const row=document.createElement('div');row.className='approved-budget-row';row.innerHTML='<div class="approved-budget-icon">'+(catIcons[x.c.nombre]||'•')+'</div><div class="approved-budget-name"><strong>'+escapeHtml(x.c.nombre)+'</strong><div class="approved-budget-track"><div class="approved-budget-fill" style="width:'+pct+'%;background:'+fill+'"></div></div></div><div class="approved-budget-meta">'+fmtMoney(x.spent)+' / '+fmtMoney(x.budget)+'</div><div class="approved-budget-pct">'+Math.round(x.budget?x.spent/x.budget*100:100)+'%</div>';budgetList.appendChild(row);});
   document.getElementById('approvedBudgetDetail').onclick=()=>{currentTab='categorias';render();};
@@ -2316,10 +2316,10 @@ function renderTransacciones(app){
     let list=state.transactions.slice();
     if(monthsSelected.length) list=list.filter(t=>monthsSelected.includes(monthKey(t.fecha)));
     if(tiposSelected.length) list=list.filter(t=>tiposSelected.includes(t.tipo));
-    if(conceptsSelected.length) list=list.filter(t=>conceptsSelected.includes((t.categoria||'')+'||'+(t.subcategoria||'')));
+    if(conceptsSelected.length) list=list.filter(t=>{const linked=t.metadata?.kind==='counterparty_settlement'&&t.metadata.originalTransactionId?state.transactions.find(x=>x.id===t.metadata.originalTransactionId):null;const base=linked||t;return conceptsSelected.includes((base.categoria||'')+'||'+(base.subcategoria||''));});
     if(q) list=list.filter(t=>normalize([t.descripcion,t.categoria,t.subcategoria,t.cuenta,t.referencia,t.referencia_id].filter(Boolean).join(' ')).includes(q));
-    if(catsSelected.length) list=list.filter(t=>catsSelected.includes(t.categoria));
-    if(subsSelected.length) list=list.filter(t=>subsSelected.includes(t.subcategoria));
+    if(catsSelected.length) list=list.filter(t=>{const linked=t.metadata?.kind==='counterparty_settlement'&&t.metadata.originalTransactionId?state.transactions.find(x=>x.id===t.metadata.originalTransactionId):null;return catsSelected.includes((linked||t).categoria);});
+    if(subsSelected.length) list=list.filter(t=>{const linked=t.metadata?.kind==='counterparty_settlement'&&t.metadata.originalTransactionId?state.transactions.find(x=>x.id===t.metadata.originalTransactionId):null;return subsSelected.includes((linked||t).subcategoria);});
     if(accountsSelected.length) list=list.filter(t=>accountsSelected.includes(t.cuenta));
     if(statusSelected.length) list=list.filter(t=>statusSelected.includes(t.estado));
     if(from) list=list.filter(t=>(t.fecha||'')>=from);
@@ -2330,8 +2330,8 @@ function renderTransacciones(app){
 
     const card=document.getElementById('txListCard');
     const toCents=value=>Math.round((Number(value)||0)*100);
-    const ingresosCents=list.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+toCents(t.monto),0);
-    const gastosCents=list.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+toCents(t.monto),0);
+    const ingresosCents=list.filter(t=>t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+toCents(t.monto),0);
+    const gastosCents=list.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+toCents(t.monto),0);
     const resultadoCents=ingresosCents-gastosCents;
     const moneyFromCents=cents=>fmtMoney(cents/100);
     const resumen=document.createElement('div');
@@ -2353,13 +2353,13 @@ function renderTransacciones(app){
     card.appendChild(count);
 
     let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Contraparte</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
-    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td>${escapeHtml((t.contrapartesAsignadas||[]).map(a=>(state.contrapartes||[]).find(p=>p.id===a.contraparteId)?.nombre).filter(Boolean).join(', ')||(state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'—')}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
+    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td>${escapeHtml((t.contrapartesAsignadas||[]).map(a=>(state.contrapartes||[]).find(p=>p.id===a.contraparteId)?.nombre).filter(Boolean).join(', ')||(state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'—')}</td><td><span class="pill ${t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
     html+='</tbody></table></div>';
 
     const mobileList=document.createElement('div');
     mobileList.className='tx-mobile-list';
     list.forEach(t=>{
-      const gasto=t.tipo==='Gasto';
+      const gasto=t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement';
       const d=new Date((t.fecha||'')+'T00:00:00');
       const mon=Number.isNaN(d.getTime())?'':(['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][d.getMonth()]);
       const day=Number.isNaN(d.getTime())?(t.fecha||'').slice(-2):String(d.getDate()).padStart(2,'0');
@@ -2599,7 +2599,7 @@ function renderPendientes(app){
     const info=document.createElement('div');info.className='card pending-count-info';info.innerHTML=`<b>${pend.length}</b> transacción(es) esperando una categoría. Asígnalas para que el sistema aprenda y las reconozca automáticamente la próxima vez.`;listWrap.appendChild(info);
     pend.forEach(t=>{
       const gastoCats=state.categories.filter(c=>c.tipo==='Gasto'),incCats=state.categories.filter(c=>c.tipo==='Ingreso');
-      const div=document.createElement('div');div.className='pending-item';div.innerHTML=`<div class="desc">${escapeHtml(t.descripcion)}</div><div class="meta">${escapeHtml(t.fecha||'')} · ${escapeHtml(t.cuenta||'')} · <b>${fmtMoney(t.monto)}</b> · <span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo)}</span></div><div class="inline-form"><div><select class="pTipo"><option value="Gasto" ${t.tipo==='Gasto'?'selected':''}>Gasto</option><option value="Ingreso" ${t.tipo==='Ingreso'?'selected':''}>Ingreso</option></select></div><div><label style="margin-bottom:4px;">Categoría</label><select class="pCat"></select></div><div><label style="margin-bottom:4px;">Subcategoría (opcional)</label><select class="pSub"></select></div></div><div class="smart-suggestion" style="margin:8px 0;padding:8px 10px;border-radius:9px;background:var(--accent-soft);border:1px solid var(--border);">${t.suggestedCategoria?`💡 <b>Sugerencia:</b> ${escapeHtml(t.suggestedCategoria)}${t.suggestedSubcategoria?` / ${escapeHtml(t.suggestedSubcategoria)}`:""} · <b>${Number(t.confidence||0)}%</b>`:"🔎 Sin sugerencia con suficiente confianza"}</div><div class="inline-form" style="margin-top:8px;"><div><input type="text" class="pNewCat" placeholder="O escribe categoría nueva"></div><div><button class="btn" style="width:100%" data-assign="${t.id}">Asignar</button></div></div><label style="display:flex;align-items:center;gap:7px;margin-top:9px;font-size:.78rem;color:var(--muted);"><input type="checkbox" class="pLearn" checked> Aprender esta decisión para futuras transacciones similares</label>`;listWrap.appendChild(div);
+      const div=document.createElement('div');div.className='pending-item';div.innerHTML=`<div class="desc">${escapeHtml(t.descripcion)}</div><div class="meta">${escapeHtml(t.fecha||'')} · ${escapeHtml(t.cuenta||'')} · <b>${fmtMoney(t.monto)}</b> · <span class="pill ${t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement'?'gasto':'ingreso'}">${escapeHtml(t.tipo)}</span></div><div class="inline-form"><div><select class="pTipo"><option value="Gasto" ${t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement'?'selected':''}>Gasto</option><option value="Ingreso" ${t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement'?'selected':''}>Ingreso</option></select></div><div><label style="margin-bottom:4px;">Categoría</label><select class="pCat"></select></div><div><label style="margin-bottom:4px;">Subcategoría (opcional)</label><select class="pSub"></select></div></div><div class="smart-suggestion" style="margin:8px 0;padding:8px 10px;border-radius:9px;background:var(--accent-soft);border:1px solid var(--border);">${t.suggestedCategoria?`💡 <b>Sugerencia:</b> ${escapeHtml(t.suggestedCategoria)}${t.suggestedSubcategoria?` / ${escapeHtml(t.suggestedSubcategoria)}`:""} · <b>${Number(t.confidence||0)}%</b>`:"🔎 Sin sugerencia con suficiente confianza"}</div><div class="inline-form" style="margin-top:8px;"><div><input type="text" class="pNewCat" placeholder="O escribe categoría nueva"></div><div><button class="btn" style="width:100%" data-assign="${t.id}">Asignar</button></div></div><label style="display:flex;align-items:center;gap:7px;margin-top:9px;font-size:.78rem;color:var(--muted);"><input type="checkbox" class="pLearn" checked> Aprender esta decisión para futuras transacciones similares</label>`;listWrap.appendChild(div);
       const tipoSel=div.querySelector('.pTipo'),catSel=div.querySelector('.pCat'),subSel=div.querySelector('.pSub');
       function refreshCats(){const cats=tipoSel.value==='Gasto'?gastoCats:incCats;catSel.innerHTML='<option value="">(elegir)</option>'+cats.map(c=>`<option value="${escapeHtml(c.nombre)}" ${c.nombre===t.categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('');refreshSubs();}
       function refreshSubs(){const cat=getCategory(tipoSel.value,catSel.value),subs=cat?cat.subcategorias:[];subSel.innerHTML='<option value="">(ninguna)</option>'+subs.map(s=>`<option value="${escapeHtml(s)}" ${s===t.subcategoria?'selected':''}>${escapeHtml(s)}</option>`).join('');}
