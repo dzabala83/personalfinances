@@ -789,6 +789,19 @@ main#app{max-width:none;padding:0 28px 38px;background:var(--approved-page)}
         <div class="nexo-field"><label for="loginPassword">Contraseña</label><div class="nexo-password-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••••"><button type="button" id="togglePassword" class="nexo-eye" aria-label="Mostrar contraseña">◉</button></div></div>
         <label class="nexo-remember" for="rememberSession"><input id="rememberSession" type="checkbox" checked><span class="nexo-check"></span><span class="nexo-remember-copy"><strong>Mantener la sesión iniciada</strong><small>Entrar automáticamente en este dispositivo</small></span></label>
         <button class="btn nexo-login-btn" id="loginBtn" type="button">Iniciar sesión</button>
+        <div style="text-align:center;margin:12px 0 2px"><button id="forgotPasswordBtn" class="nexo-auth-link" type="button">¿Olvidaste tu contraseña?</button></div>
+        <div id="passwordRecoveryPanel" style="display:none;margin-top:16px;padding:14px;border:1px solid var(--nexo-line);border-radius:12px;background:#f8faff">
+          <div style="font-weight:700;margin-bottom:6px">Restablecer contraseña</div>
+          <p style="font-size:.82rem;color:var(--nexo-muted);margin:0 0 12px">Te enviaremos un enlace seguro a tu correo. Al abrirlo podrás elegir una contraseña nueva.</p>
+          <button id="sendRecoveryBtn" class="btn nexo-login-btn" type="button">Enviar enlace de recuperación</button>
+          <div style="text-align:center;margin-top:10px"><button id="cancelRecoveryBtn" class="nexo-auth-link" type="button">Volver al inicio de sesión</button></div>
+        </div>
+        <div id="newPasswordPanel" style="display:none;margin-top:16px;padding:14px;border:1px solid var(--nexo-line);border-radius:12px;background:#f8faff">
+          <div style="font-weight:700;margin-bottom:10px">Crea tu nueva contraseña</div>
+          <div class="nexo-field"><label for="newPassword">Nueva contraseña</label><input id="newPassword" type="password" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></div>
+          <div class="nexo-field"><label for="newPassword2">Repetir contraseña</label><input id="newPassword2" type="password" autocomplete="new-password" placeholder="Repite tu contraseña"></div>
+          <button id="saveNewPasswordBtn" class="btn nexo-login-btn" type="button">Guardar nueva contraseña</button>
+        </div>
         <div class="nexo-divider"><span>o</span></div>
         <button class="nexo-face-btn" id="passkeyBtn" type="button" aria-label="Iniciar sesión con Face ID">
           <svg class="nexo-face-icon" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 8h-5a7 7 0 0 0-7 7v5M44 8h5a7 7 0 0 1 7 7v5M20 56h-5a7 7 0 0 1-7-7v-5M44 56h5a7 7 0 0 0 7-7v-5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="32" cy="27" r="10" fill="none" stroke="currentColor" stroke-width="3"/><path d="M23 46c2.7-5.5 15.3-5.5 18 0" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
@@ -830,8 +843,8 @@ const SEED_TX = [{"fecha": "2026-08-17", "descripcion": "Vidrio templado iPhone"
 const STORE_KEY_BASE = 'jf_data_v2';
 const userStoreKey=()=>currentUser?.id ? STORE_KEY_BASE+'_'+currentUser.id : null;
 const STORE_KEY = STORE_KEY_BASE;
-const SUPABASE_URL = 'https://zzpmkvhcfoilkuvtegzh.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_Qq10F0ltFeqEIg_tX0RbSw_u7tT4_QT';
+const SUPABASE_URL = 'https://lawlpvlnbozcklbdjxsv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_4mmp1qBTdUfYrIzWHKoBoQ_8fS5KcP2';
 const REMEMBER_KEY='nexo_remember_session';
 const rememberSession=()=>localStorage.getItem(REMEMBER_KEY)!=='false';
 const authStorage={
@@ -4002,6 +4015,44 @@ function setAuthMode(mode){
   if(isSignup)document.getElementById('signupName')?.focus();
   else document.getElementById('loginEmail')?.focus();
 }
+async function handlePasswordRecoveryRequest(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const btn=document.getElementById('sendRecoveryBtn');
+  if(!email){showLoginMessage('Primero ingresa tu correo electrónico.',true);document.getElementById('loginEmail').focus();return;}
+  btn.disabled=true;btn.textContent='Enviando…';showLoginMessage('');
+  try{
+    const redirectTo=window.location.origin+window.location.pathname;
+    const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo});
+    if(error)throw error;
+    showLoginMessage('Si existe una cuenta asociada a ese correo, recibirás un enlace de recuperación. Revisa también spam o correo no deseado.');
+  }catch(error){
+    console.warn('Password recovery request:',error);
+    showLoginMessage('No se pudo enviar el enlace. Verifica que la URL de TEST esté autorizada en Supabase e inténtalo nuevamente.',true);
+  }finally{btn.disabled=false;btn.textContent='Enviar enlace de recuperación';}
+}
+async function handleSaveNewPassword(){
+  const password=document.getElementById('newPassword').value;
+  const password2=document.getElementById('newPassword2').value;
+  const btn=document.getElementById('saveNewPasswordBtn');
+  if(password.length<8){showLoginMessage('La contraseña debe tener al menos 8 caracteres.',true);return;}
+  if(password!==password2){showLoginMessage('Las contraseñas no coinciden.',true);return;}
+  btn.disabled=true;btn.textContent='Guardando…';showLoginMessage('');
+  try{
+    const {error}=await supabaseClient.auth.updateUser({password});
+    if(error)throw error;
+    document.getElementById('newPasswordPanel').style.display='none';
+    document.getElementById('passwordRecoveryPanel').style.display='none';
+    document.getElementById('loginPanel').style.display='block';
+    document.getElementById('loginPassword').value='';
+    document.getElementById('newPassword').value='';
+    document.getElementById('newPassword2').value='';
+    showLoginMessage('Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
+    await supabaseClient.auth.signOut({scope:'local'});
+  }catch(error){
+    console.warn('Password update:',error);
+    showLoginMessage('No se pudo actualizar la contraseña. Solicita un nuevo enlace e inténtalo otra vez.',true);
+  }finally{btn.disabled=false;btn.textContent='Guardar nueva contraseña';}
+}
 async function handleLogin(){
   const email=document.getElementById('loginEmail').value.trim();
   const password=document.getElementById('loginPassword').value;
@@ -4048,6 +4099,18 @@ async function handleSignup(){
   btn.disabled=false;btn.textContent='Crear cuenta';
 }
 async function handlePasskey(){const btn=document.getElementById('passkeyBtn');if(!window.PublicKeyCredential||!supabaseClient.auth.signInWithPasskey){showLoginMessage('Face ID todavía no está disponible en este dispositivo.',true);return;}btn.disabled=true;showLoginMessage('');try{const {data,error}=await supabaseClient.auth.signInWithPasskey();if(error)throw error;currentUser=data.user;syncUserChrome();document.getElementById('authGate').style.display='none';document.getElementById('logoutBtn').style.display='inline-block';await initApp();}catch(err){console.warn('Passkey:',err);showLoginMessage(err?.code==='passkey_disabled'?'Activa Passkeys en Supabase para usar Face ID.':'No se pudo iniciar con Face ID.',true);}finally{btn.disabled=false;}}
+document.getElementById('forgotPasswordBtn').onclick=()=>{
+  document.getElementById('passwordRecoveryPanel').style.display='block';
+  document.getElementById('newPasswordPanel').style.display='none';
+  showLoginMessage('');
+  document.getElementById('loginEmail').focus();
+};
+document.getElementById('cancelRecoveryBtn').onclick=()=>{
+  document.getElementById('passwordRecoveryPanel').style.display='none';
+  showLoginMessage('');
+};
+document.getElementById('sendRecoveryBtn').onclick=handlePasswordRecoveryRequest;
+document.getElementById('saveNewPasswordBtn').onclick=handleSaveNewPassword;
 document.getElementById('loginBtn').onclick=handleLogin;
 document.getElementById('signupBtn').onclick=handleSignup;
 document.getElementById('showSignupBtn').onclick=()=>setAuthMode('signup');
@@ -4115,6 +4178,14 @@ document.getElementById('logoutBtn').onclick=async()=>{
       manualLogout:!!window.__nexoManualLogout,
       expiresAt:session?.expires_at||null
     });
+    if(event==='PASSWORD_RECOVERY'){
+      document.getElementById('authGate').style.display='flex';
+      document.getElementById('loginPanel').style.display='none';
+      document.getElementById('signupPanel').classList.remove('active');
+      document.getElementById('passwordRecoveryPanel').style.display='none';
+      document.getElementById('newPasswordPanel').style.display='block';
+      showLoginMessage('Verificamos el enlace. Ahora elige una contraseña nueva.');
+    }
     if(event==='SIGNED_OUT'){
       document.getElementById('authGate').style.display='flex';
       document.getElementById('logoutBtn').style.display='none';
