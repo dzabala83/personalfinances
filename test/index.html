@@ -4863,15 +4863,43 @@ document.addEventListener('click', async (event) => {
     overlay.innerHTML='<div class="card" style="width:min(440px,100%);max-height:90vh;overflow:auto"><h3>Registrar pago / devolución</h3><p style="color:var(--muted)">'+escapeHtml(p.nombre)+'</p><div class="field"><label>Dirección</label><select id="stDirection"><option value="RECEIVABLE">Me devolvió / recibí dinero</option><option value="PAYABLE">Le pagué / devolví dinero</option></select></div><div class="field"><label>Importe (Bs)</label><input id="stAmount" type="number" min="0.01" step="0.01"></div><div class="field"><label>Fecha</label><input id="stDate" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Descripción</label><input id="stDesc" type="text" value="Pago / devolución - '+escapeHtml(p.nombre)+'"></div><div class="field"><label>Movimiento original (opcional)</label><select id="stOriginal"><option value="">Sin vincular a uno específico</option>'+acc.principal.map(x=>'<option value="'+escapeHtml(x.tx.id)+'">'+escapeHtml(x.tx.fecha+' · '+x.tx.descripcion+' · '+money(x.amount))+'</option>').join('')+'</select></div><div class="row-actions" style="justify-content:flex-end"><button class="btn secondary" id="stCancel">Cancelar</button><button class="btn" id="stSave">Guardar movimiento</button></div></div>';
     document.body.appendChild(overlay);
     overlay.querySelector('#stCancel').onclick=()=>overlay.remove();
-    overlay.querySelector('#stSave').onclick=()=>{
-      const direction=overlay.querySelector('#stDirection').value,amount=Number(overlay.querySelector('#stAmount').value),date=overlay.querySelector('#stDate').value,description=overlay.querySelector('#stDesc').value.trim();
+    overlay.querySelector('#stSave').onclick=async()=>{
+      const button=overlay.querySelector('#stSave');
+      if(button.disabled)return;
+      const direction=overlay.querySelector('#stDirection').value;
+      const amount=Number(overlay.querySelector('#stAmount').value);
+      const date=overlay.querySelector('#stDate').value;
+      const description=overlay.querySelector('#stDesc').value.trim();
+      const originalId=overlay.querySelector('#stOriginal').value||null;
       if(!Number.isFinite(amount)||amount<=0||!date){showToast('Revisa el importe y la fecha');return;}
       const type=direction==='RECEIVABLE'?'Ingreso':'Gasto';
       const category=state.categories.find(c=>c.tipo===type);
       if(!category){showToast('No existe una categoría de '+(type==='Ingreso'?'ingreso':'gasto')+' para registrar el movimiento');return;}
-      const tx={id:uid('tx'),fecha:date,descripcion:description||'Pago / devolución',monto:amount,tipo:type,categoria:category.nombre,subcategoria:null,cuenta:'Manual',origen:'manual',estado:'categorizado',refId:null,contraparteId:counterpartyId,contrapartesAsignadas:[{contraparteId,monto:amount,tipoParticipacion:direction==='RECEIVABLE'?'DEBE_REEMBOLSAR':'USUARIO_DEBE'}],metadata:{kind:'counterparty_settlement',direction,counterpartyId,originalTransactionId:overlay.querySelector('#stOriginal').value||null}};
+      const tx={id:uid('tx'),fecha:date,descripcion:description||'Pago / devolución',monto:amount,tipo:type,categoria:category.nombre,subcategoria:null,cuenta:'Manual',origen:'manual',estado:'categorizado',refId:null,contraparteId:counterpartyId,contrapartesAsignadas:[],metadata:{kind:'counterparty_settlement',direction,counterpartyId,originalTransactionId:originalId}};
+      button.disabled=true;
+      button.textContent='Guardando…';
       state.transactions.push(tx);
-      saveState();overlay.remove();render();showToast('Pago / devolución registrado');
+      try{
+        const result=await saveState();
+        if(result?.cloud===false&&currentUser){
+          state.transactions=state.transactions.filter(x=>x!==tx);
+          saveLocal();
+          showToast('No se pudo guardar en la nube. No se registró el movimiento; intenta nuevamente.');
+          button.disabled=false;
+          button.textContent='Guardar movimiento';
+          return;
+        }
+        overlay.remove();
+        render();
+        showToast('Movimiento guardado correctamente');
+      }catch(error){
+        state.transactions=state.transactions.filter(x=>x!==tx);
+        saveLocal();
+        console.error('Error guardando pago/devolución:',error);
+        showToast('Error al guardar el movimiento. No se registró; intenta nuevamente.');
+        button.disabled=false;
+        button.textContent='Guardar movimiento';
+      }
     };
   }
 })();
