@@ -2423,7 +2423,11 @@ function openEditTransaction(txId){
     tx.monto=monto;
     tx.categoria=document.getElementById('eCat').value;
     tx.subcategoria=document.getElementById('eSub').value||null;
-    tx.contrapartesAsignadas=editAssignments.slice();
+    const invalidEdit=editAssignments.find(a=>!Number.isFinite(Number(a.monto))||Number(a.monto)<=0);
+    const allocatedEdit=editAssignments.reduce((sum,a)=>sum+(Number(a.monto)||0),0);
+    if(invalidEdit){showToast('Indica un importe mayor a cero para cada contraparte');return;}
+    if(allocatedEdit>monto+0.001){showToast('La suma de los reembolsos no puede superar el monto de la transacción');return;}
+    tx.contrapartesAsignadas=editAssignments.map(a=>({...a,monto:Number(a.monto)}));
     tx.contraparteId=editAssignments[0]?.contraparteId||null;
     const result=saveState();
     if(result && typeof result.then==='function') result.then(r=>{ if(r?.cloud===false) showToast('⚠️ No se pudo guardar en la nube'); else showToast('✅ Transacción actualizada'); });
@@ -2484,6 +2488,10 @@ function openManualForm(){
   document.getElementById('mSave').onclick = ()=>{
     const monto = parseAmount(document.getElementById('mMonto').value);
     if(!monto || monto<=0){ showToast('Ingresa un monto válido'); return; }
+    const invalidManual=manualAssignments.find(a=>!Number.isFinite(Number(a.monto))||Number(a.monto)<=0);
+    const allocatedManual=manualAssignments.reduce((sum,a)=>sum+(Number(a.monto)||0),0);
+    if(invalidManual){showToast('Indica un importe mayor a cero para cada contraparte');return;}
+    if(allocatedManual>monto+0.001){showToast('La suma de los reembolsos no puede superar el monto de la transacción');return;}
     state.transactions.push({
       id: uid('tx'),
       fecha: document.getElementById('mFecha').value,
@@ -2493,7 +2501,7 @@ function openManualForm(){
       categoria: document.getElementById('mCat').value,
       subcategoria: document.getElementById('mSub').value || null,
       contraparteId: manualAssignments[0]?.contraparteId||null,
-      contrapartesAsignadas: manualAssignments.slice(),
+      contrapartesAsignadas: manualAssignments.map(a=>({...a,monto:Number(a.monto)})),
       cuenta: 'Manual',
       origen: 'manual',
       estado: 'categorizado',
