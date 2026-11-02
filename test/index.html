@@ -1884,7 +1884,7 @@ function renderDashboardMobile(app){
 
   const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
   const ingresos=txMonth.filter(t=>t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+Number(t.monto||0),0);
-  const gastos=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+Number(t.monto||0),0)-txMonth.filter(t=>t.metadata?.kind==='counterparty_settlement'&&t.metadata.direction==='RECEIVABLE').reduce((sum,t)=>sum+Number(t.monto||0),0);
 
   const monthNav=document.createElement('div');
   monthNav.className='mobile-month-control';
@@ -2014,7 +2014,7 @@ function renderDashboard(app){
   const wrap=document.createElement('div');wrap.className='approved-dashboard';
   const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
   const ingresos=txMonth.filter(t=>t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((s,t)=>s+Number(t.monto||0),0);
-  const gastos=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((s,t)=>s+Number(t.monto||0),0);
+  const gastos=txMonth.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((s,t)=>s+Number(t.monto||0),0)-txMonth.filter(t=>t.metadata?.kind==='counterparty_settlement'&&t.metadata.direction==='RECEIVABLE').reduce((s,t)=>s+Number(t.monto||0),0);
   const balance=ingresos-gastos;
   const gastoCats=state.categories.filter(c=>c.tipo==='Gasto');
   const totalBudget=gastoCats.reduce((s,c)=>s+Number(categoryBudget(c)||0),0);
@@ -2331,7 +2331,7 @@ function renderTransacciones(app){
     const card=document.getElementById('txListCard');
     const toCents=value=>Math.round((Number(value)||0)*100);
     const ingresosCents=list.filter(t=>t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+toCents(t.monto),0);
-    const gastosCents=list.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+toCents(t.monto),0);
+    const gastosCents=list.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+toCents(t.monto),0)-list.filter(t=>t.metadata?.kind==='counterparty_settlement'&&t.metadata.direction==='RECEIVABLE').reduce((sum,t)=>sum+toCents(t.monto),0);
     const resultadoCents=ingresosCents-gastosCents;
     const moneyFromCents=cents=>fmtMoney(cents/100);
     const resumen=document.createElement('div');
