@@ -16,9 +16,9 @@ test('release frontend uses only production Supabase config',()=>{
 });
 
 test('all inline JavaScript compiles',()=>{
-  const scripts=[...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)].map(m=>m[1]);
+  const scripts=[...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)].map(m=>m[1]);
   assert.ok(scripts.length>0);
-  scripts.forEach((source,i)=>assert.doesNotThrow(()=>new Function(source),`script block ${i}`));
+  scripts.forEach((source,i)=>assert.doesNotThrow(()=>new Function(source),'script block '+i));
 });
 
 test('multi-counterparty UI validates and persists individual shares',()=>{
