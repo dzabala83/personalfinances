@@ -34,5 +34,5 @@ test('allocation migration enforces same-user ownership and positive amount',()=
 });
 
 test('account reset migration cleans counterparties safely',()=>{
- for(const token of ['create or replace function public.reset_my_finanzas()','v_user_id := (select auth.uid())',"raise exception 'No authenticated user'","delete from public.contrapartes where usuario_id = v_user_id",'set search_path to']) assert.ok(migration3.includes(token),token);
+ for(const token of ['create or replace function public.reset_my_finanzas()','v_user_id uuid := (select auth.uid())',"raise exception 'No authenticated user'","delete from public.contrapartes where usuario_id = v_user_id",'set search_path to']) assert.ok(migration3.includes(token),token);
 });
