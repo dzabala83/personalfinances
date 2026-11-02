@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const migration1=readFileSync(new URL('../supabase/migrations/20261019_add_contrapartes_and_transaction_links.sql',import.meta.url),'utf8');
 const migration2=readFileSync(new URL('../supabase/migrations/20261102_add_multiple_counterparties.sql',import.meta.url),'utf8');
+const migration3=readFileSync(new URL('../supabase/migrations/20261102_update_reset_finanzas_for_counterparties.sql',import.meta.url),'utf8');
 
 test('release frontend uses only production Supabase config',()=>{
   assert.ok(html.includes('https://femwcgsptumpmwjqnhxp.supabase.co'));
@@ -46,4 +47,12 @@ test('allocation migration enforces same-user ownership and positive amount',()=
   assert.ok(migration2.includes('monto_asignado numeric(14,2) not null check (monto_asignado > 0)'));
   assert.ok(migration2.includes('alter table public.transaccion_contrapartes enable row level security'));
   assert.ok(migration2.includes('(select auth.uid()) = usuario_id'));
+});
+
+test('account reset removes counterparties after deleting related transactions',()=>{
+  assert.ok(migration3.includes('create or replace function public.reset_my_finanzas()'));
+  assert.ok(migration3.includes('v_user_id := (select auth.uid())'));
+  assert.ok(migration3.includes("raise exception 'No authenticated user'"));
+  assert.ok(migration3.includes('delete from public.contrapartes where usuario_id = v_user_id'));
+  assert.ok(migration3.includes('set search_path to'));
 });
