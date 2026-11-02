@@ -1693,7 +1693,7 @@ function syncUserChrome(){
 const TABS = [
   {id:'dashboard', label:'📊 Resumen'},
   {id:'transacciones', label:'📄 Transacciones'},
-  {id:'contrapartes', label:'🤝 Contrapartes'},1
+  {id:'contrapartes', label:'🤝 Contrapartes'},
   {id:'pendientes', label:'❓ Pendientes'},
   {id:'categorias', label:'🏷️ Categorías'},
   {id:'subir', label:'⬆️ Subir extracto'},
@@ -4378,7 +4378,7 @@ document.addEventListener('click', async (event) => {
     const findBtn=(word)=>[...nav.querySelectorAll('button')].find(b=>(b.textContent||'').toLowerCase().includes(word));
     const pending=findBtn('pendientes');
     const counterparties=findBtn('contrapartes');
-    const categories=findBtn('categorías')||findBtn('categorias');,1
+    const categories=findBtn('categorías')||findBtn('categorias');
     const backup=findBtn('backup');
     const logout=document.getElementById('logoutBtn');
     if(!pending&&!counterparties&&!categories&&!backup&&!logout)return;
