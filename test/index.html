@@ -2378,7 +2378,7 @@ function renderTransacciones(app){
     card.appendChild(mobileList);
 
     const editHandler=id=>openEditTransaction(id);
-    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
+    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);if(tx.metadata?.kind==='counterparty_settlement'){try{if(currentUser){const [a,b]=await Promise.all([supabaseClient.from('transacciones').delete().eq('id',tx.id).eq('usuario_id',currentUser.id),supabaseClient.from('transaccion_contrapartes').delete().eq('transaccion_id',tx.id).eq('usuario_id',currentUser.id)]);if(a.error)throw a.error;if(b.error)throw b.error;}cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};cloudSnapshot.transactions=cloudSnapshot.transactions.filter(t=>t.id!==tx.id);saveLocal();}catch(err){state.transactions=original;saveLocal();throw err;}}else{const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
     card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.edit));
     card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.del));
     card.querySelectorAll('[data-mobile-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.mobileEdit));
@@ -2751,19 +2751,29 @@ function showDeleteTransactionModal(tx, onConfirm){
   document.body.appendChild(overlay);
   const cancel=overlay.querySelector('#cancelDeleteTransaction');
   const confirm=overlay.querySelector('#confirmDeleteTransaction');
-  let seconds=10;
-  const timer=setInterval(()=>{
-    seconds--;
-    if(seconds>0){
-      confirm.textContent=`Eliminar (${seconds})`;
-    }else{
-      clearInterval(timer);
-      confirm.textContent='Eliminar';
-      confirm.disabled=false;
-      confirm.style.opacity='1';
-      confirm.style.cursor='pointer';
-    }
-  },1000);
+  let seconds=tx.metadata?.kind==='counterparty_settlement'?0:10;
+  let timer=null;
+  if(seconds>0){
+    confirm.disabled=true;
+    timer=setInterval(()=>{
+      seconds--;
+      if(seconds>0){
+        confirm.textContent=`Eliminar (${seconds})`;
+      }else{
+        clearInterval(timer);
+        confirm.textContent='Eliminar';
+        confirm.disabled=false;
+        confirm.style.opacity='1';
+        confirm.style.cursor='pointer';
+      }
+    },1000);
+  }else{
+    confirm.textContent='Eliminar';
+    confirm.disabled=false;
+    confirm.style.opacity='1';
+    confirm.style.cursor='pointer';
+    overlay.querySelector('[style*="Debes esperar 10 segundos"]').textContent='Confirma únicamente si deseas eliminar esta devolución.';
+  }
   const close=()=>{ clearInterval(timer); overlay.remove(); };
   cancel.onclick=close;
   overlay.addEventListener('click',e=>{ if(e.target===overlay) close(); });
@@ -4875,28 +4885,34 @@ document.addEventListener('click', async (event) => {
       const type=direction==='RECEIVABLE'?'Ingreso':'Gasto';
       const category=state.categories.find(c=>c.tipo===type);
       if(!category){showToast('No existe una categoría de '+(type==='Ingreso'?'ingreso':'gasto')+' para registrar el movimiento');return;}
-      const tx={id:uid('tx'),fecha:date,descripcion:description||'Pago / devolución',monto:amount,tipo:type,categoria:category.nombre,subcategoria:null,cuenta:'Manual',origen:'manual',estado:'categorizado',refId:null,contraparteId:counterpartyId,contrapartesAsignadas:[],metadata:{kind:'counterparty_settlement',direction,counterpartyId,originalTransactionId:originalId}};
+      const tx={id:crypto.randomUUID(),fecha:date,descripcion:description||'Pago / devolución',monto:amount,tipo:type,categoria:category.nombre,subcategoria:null,cuenta:'Manual',origen:'manual',estado:'categorizado',refId:null,contraparteId:counterpartyId,contrapartesAsignadas:[],metadata:{kind:'counterparty_settlement',direction,counterpartyId,originalTransactionId:originalId}};
       button.disabled=true;
       button.textContent='Guardando…';
       state.transactions.push(tx);
+      saveLocal();
       try{
-        const result=await saveState();
-        if(result?.cloud===false&&currentUser){
-          state.transactions=state.transactions.filter(x=>x!==tx);
-          saveLocal();
-          showToast('No se pudo guardar en la nube. No se registró el movimiento; intenta nuevamente.');
-          button.disabled=false;
-          button.textContent='Guardar movimiento';
-          return;
+        if(currentUser){
+          const catKey=type+'|'+category.nombre;
+          let categoryId=cloudEntityCache.categories.get(catKey);
+          if(!UUID_RE.test(categoryId||'')) throw new Error('No se encontró el identificador de la categoría en la nube.');
+          const row={id:tx.id,usuario_id:currentUser.id,fecha:tx.fecha,descripcion:tx.descripcion,monto:tx.monto,tipo:tx.tipo,contraparte_id:counterpartyId,categoria_id:categoryId,subcategoria_id:null,cuenta:tx.cuenta,origen:tx.origen,estado:tx.estado,referencia_id:null,metadata:tx.metadata};
+          const result=await supabaseClient.from('transacciones').insert(row);
+          if(result.error)throw result.error;
+          cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};
+          cloudSnapshot.transactions.push({...tx});
+          cloudActive=true;
+        }else{
+          showToast('Guardado localmente. Se sincronizará al iniciar sesión.');
         }
+        saveLocal();
         overlay.remove();
         render();
         showToast('Movimiento guardado correctamente');
       }catch(error){
-        state.transactions=state.transactions.filter(x=>x!==tx);
+        state.transactions=state.transactions.filter(x=>x.id!==tx.id);
         saveLocal();
         console.error('Error guardando pago/devolución:',error);
-        showToast('Error al guardar el movimiento. No se registró; intenta nuevamente.');
+        showToast('No se pudo guardar. No se registró el movimiento; intenta nuevamente.');
         button.disabled=false;
         button.textContent='Guardar movimiento';
       }
