@@ -1243,7 +1243,7 @@ async function loadFromSupabase(){
   const categories=cats.map(c=>({id:c.id,tipo:c.tipo,nombre:c.nombre,subcategorias:(subByCat[c.id]||[]).map(s=>s.nombre),presupuesto:budgetByCat[c.id]?.direct||0,subPresupuestos:budgetByCat[c.id]?.subs||{}}));
   const catById=Object.fromEntries(categories.map(c=>[c.id,c]));
   const subNameById=Object.fromEntries((subs||[]).map(s=>[s.id,s.nombre]));
-  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null,contraparteId:t.contraparte_id||null}));
+  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null,contraparteId:t.contraparte_id||null,metadata:t.metadata||{}}));
   const [{data:contrapartes,error:counterpartiesError},{data:assignments,error:assignmentsError}]=await Promise.all([
     supabaseClient.from('contrapartes').select('*').order('nombre'),
     supabaseClient.from('transaccion_contrapartes').select('*')
@@ -1430,16 +1430,16 @@ async function saveState(){
           : null,
         cuenta:tx.cuenta||null,origen:tx.origen||null,
         estado:tx.estado||'categorizado',
-        referencia_id:tx.refId||null,metadata:{}
+        referencia_id:tx.refId||null,metadata:tx.metadata||{}
       };
       const old=previousById[id];
       if(!old || !same(
         {fecha:old.fecha,descripcion:old.descripcion,monto:Number(old.monto)||0,tipo:old.tipo,
          categoria:old.categoria,subcategoria:old.subcategoria,cuenta:old.cuenta,origen:old.origen,
-         estado:old.estado,refId:old.refId||null,contraparteId:old.contraparteId||null},
+         estado:old.estado,refId:old.refId||null,contraparteId:old.contraparteId||null,metadata:old.metadata||{}},
         {fecha:tx.fecha,descripcion:tx.descripcion,monto:Number(tx.monto)||0,tipo:tx.tipo,
          categoria:tx.categoria,subcategoria:tx.subcategoria,cuenta:tx.cuenta,origen:tx.origen,
-         estado:tx.estado,refId:tx.refId||null,contraparteId:tx.contraparteId||null}
+         estado:tx.estado,refId:tx.refId||null,contraparteId:tx.contraparteId||null,metadata:tx.metadata||{}}
       )){
         txRows.push(row);
       }
@@ -4803,5 +4803,79 @@ document.addEventListener('click', async (event) => {
 :root[data-theme="dark"] .nexo-greeting h1{color:#e8eef9!important;}
 :root[data-theme="dark"] .nexo-greeting p{color:#9aa8bc!important;}
 </style>
+
+<script id="nexo-counterparty-accounting-v1">
+/* Estado de cuenta por contraparte: cuentas por cobrar y por pagar. */
+(function(){
+  if(window.__nexoCounterpartyAccountingV1)return;
+  window.__nexoCounterpartyAccountingV1=true;
+  const cents=v=>Math.round((Number(v)||0)*100);
+  const money=v=>fmtMoney((v||0)/100);
+  function assignments(tx){return tx.contrapartesAsignadas|| (tx.contraparteId?[{contraparteId:tx.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[]);}
+  function getAccount(p){
+    const principal=[];
+    (state.transactions||[]).forEach(tx=>{
+      if(tx.metadata?.kind==='counterparty_settlement')return;
+      assignments(tx).filter(a=>a.contraparteId===p.id).forEach(a=>{
+        const amount=cents(a.monto||0);
+        if(!amount)return;
+        const direction=a.tipoParticipacion==='USUARIO_DEBE'?'PAYABLE':'RECEIVABLE';
+        principal.push({tx,direction,amount});
+      });
+    });
+    const settlements=(state.transactions||[]).filter(tx=>tx.metadata?.kind==='counterparty_settlement'&&tx.metadata?.counterpartyId===p.id);
+    let receivable=principal.filter(x=>x.direction==='RECEIVABLE').reduce((n,x)=>n+x.amount,0);
+    let payable=principal.filter(x=>x.direction==='PAYABLE').reduce((n,x)=>n+x.amount,0);
+    let received=0,paid=0;
+    settlements.forEach(tx=>{
+      const amount=cents(tx.monto);
+      if(tx.metadata.direction==='RECEIVABLE')received+=amount;
+      if(tx.metadata.direction==='PAYABLE')paid+=amount;
+    });
+    return {principal,settlements,receivable, payable, received, paid, receivableBalance:receivable-received,payableBalance:payable-paid};
+  }
+  window.nexoCounterpartyAccount=getAccount;
+  window.renderContrapartes=function(app){
+    const wrap=document.createElement('div');
+    const accounts=(state.contrapartes||[]).map(p=>({p,a:getAccount(p)}));
+    const total=(key)=>accounts.reduce((n,x)=>n+x.a[key],0);
+    const head=document.createElement('div');head.className='card';
+    head.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 5px">Contrapartes</h2><p style="margin:0;color:var(--muted);font-size:.88rem">Estado de cuenta individual: deudas por cobrar y por pagar.</p></div><button class="btn" id="addCounterparty">+ Nueva contraparte</button></div>';
+    wrap.appendChild(head);
+    const summary=document.createElement('div');summary.className='grid2';
+    summary.innerHTML='<div class="card"><div style="color:var(--muted);font-size:.78rem">TOTAL POR COBRAR</div><div style="font-size:1.45rem;font-weight:800;color:var(--green)">'+money(total('receivableBalance'))+'</div><small style="color:var(--muted)">Recuperado: '+money(total('received'))+'</small></div><div class="card"><div style="color:var(--muted);font-size:.78rem">TOTAL POR PAGAR</div><div style="font-size:1.45rem;font-weight:800;color:var(--red)">'+money(total('payableBalance'))+'</div><small style="color:var(--muted)">Pagado: '+money(total('paid'))+'</small></div>';
+    wrap.appendChild(summary);
+    const list=document.createElement('div');list.className='card';wrap.appendChild(list);
+    if(!accounts.length)list.innerHTML='<div class="empty">Todavía no tienes contrapartes registradas.</div>';
+    else{
+      list.innerHTML='<div style="display:grid;gap:10px">'+accounts.sort((a,b)=>a.p.nombre.localeCompare(b.p.nombre,'es')).map(({p,a})=>'<details style="border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><span><strong>'+escapeHtml(p.nombre)+'</strong><small style="display:block;color:var(--muted)">'+escapeHtml(p.tipo||'Persona')+' · '+escapeHtml(p.telefono||p.email||'Sin contacto')+'</small></span><span style="text-align:right;font-size:.82rem"><span style="color:var(--green)">Por cobrar '+money(a.receivableBalance)+'</span><br><span style="color:var(--red)">Por pagar '+money(a.payableBalance)+'</span></span></summary><div style="margin-top:12px"><div class="grid2"><div><small style="color:var(--muted)">Debe reembolsarte</small><strong style="display:block;color:var(--green)">'+money(a.receivable)+'</strong><small>Recuperado: '+money(a.received)+'</small></div><div><small style="color:var(--muted)">Tú debes</small><strong style="display:block;color:var(--red)">'+money(a.payable)+'</strong><small>Pagado: '+money(a.paid)+'</small></div></div><div class="row-actions" style="margin:12px 0"><button data-settle="'+p.id+'">Registrar pago / devolución</button><button data-edit-cp="'+p.id+'">Editar</button><button data-toggle-cp="'+p.id+'">'+(p.activo===false?'Activar':'Desactivar')+'</button></div><h4 style="margin:12px 0 6px">Movimientos de origen</h4>'+a.principal.map(x=>'<div style="padding:8px 0;border-top:1px solid var(--border);font-size:.82rem"><strong>'+escapeHtml(x.tx.descripcion||'Movimiento')+'</strong> · '+escapeHtml(x.tx.fecha||'')+'<br><span style="color:'+(x.direction==='RECEIVABLE'?'var(--green)':'var(--red)')+'">'+(x.direction==='RECEIVABLE'?'Te deben':'Tú debes')+' '+money(x.amount)+'</span></div>').join('')+'<h4 style="margin:12px 0 6px">Pagos y devoluciones</h4>'+a.settlements.map(x=>'<div style="padding:8px 0;border-top:1px solid var(--border);font-size:.82rem"><strong>'+escapeHtml(x.descripcion||'Pago')+'</strong> · '+escapeHtml(x.fecha||'')+'<br>'+((x.metadata.direction==='RECEIVABLE'?'Recibiste ':'Pagaste ')+money(cents(x.monto)))+'</div>').join('')+(a.principal.length||a.settlements.length?'':'<div class="empty">Sin movimientos financieros asociados.</div>')+'</div></details>').join('')+'</div>';
+      list.querySelectorAll('[data-edit-cp]').forEach(b=>b.onclick=e=>{e.preventDefault();openCounterpartyForm(b.dataset.editCp);});
+      list.querySelectorAll('[data-toggle-cp]').forEach(b=>b.onclick=e=>{e.preventDefault();const p=state.contrapartes.find(x=>x.id===b.dataset.toggleCp);if(!p)return;p.activo=p.activo===false;saveState();render();});
+      list.querySelectorAll('[data-settle]').forEach(b=>b.onclick=e=>{e.preventDefault();openSettlement(b.dataset.settle);});
+    }
+    head.querySelector('#addCounterparty').onclick=()=>openCounterpartyForm();
+    app.appendChild(wrap);
+  };
+  function openSettlement(counterpartyId){
+    const p=(state.contrapartes||[]).find(x=>x.id===counterpartyId);if(!p)return;
+    const acc=getAccount(p);
+    const overlay=document.createElement('div');overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    overlay.innerHTML='<div class="card" style="width:min(440px,100%);max-height:90vh;overflow:auto"><h3>Registrar pago / devolución</h3><p style="color:var(--muted)">'+escapeHtml(p.nombre)+'</p><div class="field"><label>Dirección</label><select id="stDirection"><option value="RECEIVABLE">Me devolvió / recibí dinero</option><option value="PAYABLE">Le pagué / devolví dinero</option></select></div><div class="field"><label>Importe (Bs)</label><input id="stAmount" type="number" min="0.01" step="0.01"></div><div class="field"><label>Fecha</label><input id="stDate" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Descripción</label><input id="stDesc" type="text" value="Pago / devolución - '+escapeHtml(p.nombre)+'"></div><div class="field"><label>Movimiento original (opcional)</label><select id="stOriginal"><option value="">Sin vincular a uno específico</option>'+acc.principal.map(x=>'<option value="'+escapeHtml(x.tx.id)+'">'+escapeHtml(x.tx.fecha+' · '+x.tx.descripcion+' · '+money(x.amount))+'</option>').join('')+'</select></div><div class="row-actions" style="justify-content:flex-end"><button class="btn secondary" id="stCancel">Cancelar</button><button class="btn" id="stSave">Guardar movimiento</button></div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('#stCancel').onclick=()=>overlay.remove();
+    overlay.querySelector('#stSave').onclick=()=>{
+      const direction=overlay.querySelector('#stDirection').value,amount=Number(overlay.querySelector('#stAmount').value),date=overlay.querySelector('#stDate').value,description=overlay.querySelector('#stDesc').value.trim();
+      if(!Number.isFinite(amount)||amount<=0||!date){showToast('Revisa el importe y la fecha');return;}
+      const type=direction==='RECEIVABLE'?'Ingreso':'Gasto';
+      const category=state.categories.find(c=>c.tipo===type);
+      if(!category){showToast('No existe una categoría de '+(type==='Ingreso'?'ingreso':'gasto')+' para registrar el movimiento');return;}
+      const tx={id:uid('tx'),fecha:date,descripcion:description||'Pago / devolución',monto:amount,tipo:type,categoria:category.nombre,subcategoria:null,cuenta:'Manual',origen:'manual',estado:'categorizado',refId:null,contraparteId:counterpartyId,contrapartesAsignadas:[{contraparteId,monto:amount,tipoParticipacion:direction==='RECEIVABLE'?'DEBE_REEMBOLSAR':'USUARIO_DEBE'}],metadata:{kind:'counterparty_settlement',direction,counterpartyId,originalTransactionId:overlay.querySelector('#stOriginal').value||null}};
+      state.transactions.push(tx);
+      saveState();overlay.remove();render();showToast('Pago / devolución registrado');
+    };
+  }
+})();
+</script>
+
 </body>
 </html>
