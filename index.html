@@ -852,11 +852,15 @@ const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a
 let cloudSnapshot = null;
 
 function migrateState(s){
+  if(!Array.isArray(s.contrapartes)) s.contrapartes=[];
+  (s.transactions||[]).forEach(t=>{if(!('contraparteId' in t))t.contraparteId=null;});
   (s.categories||[]).forEach(c=>{
     if(!c.subPresupuestos) c.subPresupuestos = {};
     if(typeof c.presupuesto !== 'number') c.presupuesto = 0;
   });
 }
+
+
 function categoryBudget(c){
   if(c.subcategorias && c.subcategorias.length>0){
     const subs=c.subPresupuestos||{};
@@ -1227,10 +1231,21 @@ async function loadFromSupabase(){
   const categories=cats.map(c=>({id:c.id,tipo:c.tipo,nombre:c.nombre,subcategorias:(subByCat[c.id]||[]).map(s=>s.nombre),presupuesto:budgetByCat[c.id]?.direct||0,subPresupuestos:budgetByCat[c.id]?.subs||{}}));
   const catById=Object.fromEntries(categories.map(c=>[c.id,c]));
   const subNameById=Object.fromEntries((subs||[]).map(s=>[s.id,s.nombre]));
-  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null}));
+  const transactions=(tx||[]).map(t=>({id:t.id,fecha:t.fecha,descripcion:t.descripcion,monto:Number(t.monto)||0,tipo:t.tipo,categoria:catById[t.categoria_id]?.nombre||'',subcategoria:t.subcategoria_id?subNameById[t.subcategoria_id]||null:null,cuenta:t.cuenta,origen:t.origen,estado:t.estado,refId:t.referencia_id||t.referencia||null,contraparteId:t.contraparte_id||null,metadata:t.metadata||{}}));
+  const [{data:contrapartes,error:counterpartiesError},{data:assignments,error:assignmentsError}]=await Promise.all([
+    supabaseClient.from('contrapartes').select('*').order('nombre'),
+    supabaseClient.from('transaccion_contrapartes').select('*')
+  ]);
+  if(counterpartiesError) throw counterpartiesError;
+  if(assignmentsError) throw assignmentsError;
+  const counterparties=(contrapartes||[]).map(p=>({id:p.id,nombre:p.nombre,tipo:p.tipo,telefono:p.telefono||'',email:p.email||'',notas:p.notas||'',activo:p.activo!==false}));
+  const assignmentByTx={};
+  (assignments||[]).forEach(a=>{(assignmentByTx[a.transaccion_id]||(assignmentByTx[a.transaccion_id]=[])).push({contraparteId:a.contraparte_id,monto:Number(a.monto_asignado)||0,tipoParticipacion:a.tipo_participacion||'DEBE_REEMBOLSAR'});});
+  transactions.forEach(t=>{t.contrapartesAsignadas=assignmentByTx[t.id]|| (t.contraparteId?[{contraparteId:t.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[]);});
   const rules2=(rules||[]).map(r=>({id:r.id,keyword:r.palabra_clave,tipo:r.categoria_id&&catById[r.categoria_id]?catById[r.categoria_id].tipo:'Gasto',categoria:catById[r.categoria_id]?.nombre||'',subcategoria:r.subcategoria_id?subNameById[r.subcategoria_id]||null:null}));
-  return {categories,rules:rules2,transactions,seeded:false,seedImported:true};
+  return {categories,rules:rules2,transactions,contrapartes:counterparties,seeded:false,seedImported:true};
 }
+
 
 async function setAppInitialized(value=true){
   if(!currentUser) return;
@@ -1377,6 +1392,13 @@ async function saveState(){
     // --- Transacciones: SOLO nuevas o modificadas ---
     const previousTx=cloudSnapshot?.transactions||[];
     const previousById=Object.fromEntries(previousTx.map(t=>[t.id,t]));
+    const counterpartRows=[];
+    for(const p of (state.contrapartes||[])){
+      if(!p.nombre||!p.nombre.trim()) continue;
+      if(!UUID_RE.test(p.id||'')) p.id=crypto.randomUUID();
+      counterpartRows.push({id:p.id,usuario_id:user_id,nombre:p.nombre.trim(),tipo:p.tipo||'Persona',telefono:p.telefono||null,email:p.email||null,notas:p.notas||null,activo:p.activo!==false,updated_at:new Date().toISOString()});
+    }
+    if(counterpartRows.length){const r=await supabaseClient.from('contrapartes').upsert(counterpartRows,{onConflict:'id'});if(r.error)throw r.error;}
     const txRows=[];
     const currentIds=new Set();
 
@@ -1390,23 +1412,23 @@ async function saveState(){
 
       const row={
         id,usuario_id:user_id,fecha:tx.fecha,descripcion:tx.descripcion,
-        monto:Number(tx.monto)||0,tipo:tx.tipo,
+        monto:Number(tx.monto)||0,tipo:tx.tipo,contraparte_id:tx.contraparteId||null,
         categoria_id:catByKey[tx.tipo+'|'+tx.categoria]||null,
         subcategoria_id:tx.subcategoria
           ? (subMap[(catByKey[tx.tipo+'|'+tx.categoria]||'')+'|'+tx.subcategoria]||null)
           : null,
         cuenta:tx.cuenta||null,origen:tx.origen||null,
         estado:tx.estado||'categorizado',
-        referencia_id:tx.refId||null,metadata:{}
+        referencia_id:tx.refId||null,metadata:tx.metadata||{}
       };
       const old=previousById[id];
       if(!old || !same(
         {fecha:old.fecha,descripcion:old.descripcion,monto:Number(old.monto)||0,tipo:old.tipo,
          categoria:old.categoria,subcategoria:old.subcategoria,cuenta:old.cuenta,origen:old.origen,
-         estado:old.estado,refId:old.refId||null},
+         estado:old.estado,refId:old.refId||null,contraparteId:old.contraparteId||null,metadata:old.metadata||{}},
         {fecha:tx.fecha,descripcion:tx.descripcion,monto:Number(tx.monto)||0,tipo:tx.tipo,
          categoria:tx.categoria,subcategoria:tx.subcategoria,cuenta:tx.cuenta,origen:tx.origen,
-         estado:tx.estado,refId:tx.refId||null}
+         estado:tx.estado,refId:tx.refId||null,contraparteId:tx.contraparteId||null,metadata:tx.metadata||{}}
       )){
         txRows.push(row);
       }
@@ -1415,6 +1437,17 @@ async function saveState(){
     if(txRows.length){
       const r=await supabaseClient.from('transacciones').upsert(txRows,{onConflict:'id'});
       if(r.error) throw r.error;
+    }
+    // Reemplaza las asignaciones de contraparte para las transacciones guardadas.
+    for(const tx of (state.transactions||[])){
+      if(!UUID_RE.test(tx.id||'')) continue;
+      const del=await supabaseClient.from('transaccion_contrapartes').delete().eq('transaccion_id',tx.id).eq('usuario_id',user_id);
+      if(del.error) throw del.error;
+      const assignments=(tx.contrapartesAsignadas||[]).filter(a=>a.contraparteId && (state.contrapartes||[]).some(p=>p.id===a.contraparteId)).map(a=>({
+        usuario_id:user_id,transaccion_id:tx.id,contraparte_id:a.contraparteId,
+        tipo_participacion:a.tipoParticipacion||'DEBE_REEMBOLSAR',monto_asignado:Number(a.monto)||0
+      }));
+      if(assignments.length){const ins=await supabaseClient.from('transaccion_contrapartes').insert(assignments);if(ins.error)throw ins.error;}
     }
 
     // Si ya tenemos una foto fiable de la nube, eliminamos SOLO transacciones
@@ -1477,6 +1510,7 @@ async function saveState(){
     return {cloud:false,error};
   }
 }
+
 
 async function initApp(){
   cleanupLegacyMigrationForCurrentUser();
@@ -1649,11 +1683,13 @@ function syncUserChrome(){
 const TABS = [
   {id:'dashboard', label:'📊 Resumen'},
   {id:'transacciones', label:'📄 Transacciones'},
+  {id:'contrapartes', label:'🤝 Contrapartes'},
   {id:'pendientes', label:'❓ Pendientes'},
   {id:'categorias', label:'🏷️ Categorías'},
   {id:'subir', label:'⬆️ Subir extracto'},
   {id:'backup', label:'💾 Backup'}
 ];
+
 
 function pendingCount(){
   return state.transactions.filter(t=>t.estado==='pendiente').length;
@@ -1677,8 +1713,8 @@ function renderNav(){
   const brand=document.createElement('div'); brand.className='nexo-sidebar-brand';
   brand.innerHTML='<div class="brand-main">NEXO</div><div class="brand-sub">FINANZAS</div>'; nav.appendChild(brand);
   const group=document.createElement('div'); group.className='nexo-nav-group';
-  const icons={dashboard:'⌂',transacciones:'▤',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
-  ['dashboard','transacciones','categorias','subir','pendientes'].forEach(id=>{
+  const icons={dashboard:'⌂',transacciones:'▤',contrapartes:'♙',categorias:'◇',subir:'↥',pendientes:'◷',backup:'▣'};
+  ['dashboard','transacciones','contrapartes','categorias','subir','pendientes'].forEach(id=>{
     const tab=TABS.find(x=>x.id===id); if(!tab)return;
     const btn=document.createElement('button'); btn.dataset.tab=tab.id; btn.className=tab.id===currentTab?'active':'';
     const label=tab.label.replace(/^\S+\s*/,'');
@@ -1697,6 +1733,7 @@ function renderNav(){
   const config=document.createElement('button');config.className='nexo-secondary';config.innerHTML='<span class="nav-icon">⚙</span><span class="nav-label">Configuración</span>';config.onclick=()=>{currentTab='config';render();};nav.appendChild(config);
   const logout=document.createElement('button');logout.className='nexo-secondary nexo-logout-side';logout.innerHTML='<span class="nav-icon">⇥</span><span class="nav-label">Cerrar sesión</span>';logout.onclick=()=>document.getElementById('logoutBtn')?.click();nav.appendChild(logout);
 }
+
 
 function renderConfiguracion(app){
   const wrap=document.createElement('div'); wrap.className='nexo-config';
@@ -1796,12 +1833,14 @@ function render(){
   app.innerHTML = '';
   if(currentTab==='dashboard') renderDashboard(app);
   else if(currentTab==='transacciones') renderTransacciones(app);
+  else if(currentTab==='contrapartes') renderContrapartes(app);
   else if(currentTab==='pendientes') renderPendientes(app);
   else if(currentTab==='categorias') renderCategorias(app);
   else if(currentTab==='subir') renderSubir(app);
   else if(currentTab==='backup') renderBackup(app);
   else if(currentTab==='config') renderConfiguracion(app);
 }
+
 
 /* ================= DASHBOARD ================= */
 function renderDashboardMobile(app){
@@ -2242,10 +2281,10 @@ function renderTransacciones(app){
     let list=state.transactions.slice();
     if(monthsSelected.length) list=list.filter(t=>monthsSelected.includes(monthKey(t.fecha)));
     if(tiposSelected.length) list=list.filter(t=>tiposSelected.includes(t.tipo));
-    if(conceptsSelected.length) list=list.filter(t=>conceptsSelected.includes((t.categoria||'')+'||'+(t.subcategoria||'')));
+    if(conceptsSelected.length) list=list.filter(t=>{const linked=t.metadata?.kind==='counterparty_settlement'&&t.metadata.originalTransactionId?state.transactions.find(x=>x.id===t.metadata.originalTransactionId):null;const base=linked||t;return conceptsSelected.includes((base.categoria||'')+'||'+(base.subcategoria||''));});
     if(q) list=list.filter(t=>normalize([t.descripcion,t.categoria,t.subcategoria,t.cuenta,t.referencia,t.referencia_id].filter(Boolean).join(' ')).includes(q));
-    if(catsSelected.length) list=list.filter(t=>catsSelected.includes(t.categoria));
-    if(subsSelected.length) list=list.filter(t=>subsSelected.includes(t.subcategoria));
+    if(catsSelected.length) list=list.filter(t=>{const linked=t.metadata?.kind==='counterparty_settlement'&&t.metadata.originalTransactionId?state.transactions.find(x=>x.id===t.metadata.originalTransactionId):null;return catsSelected.includes((linked||t).categoria);});
+    if(subsSelected.length) list=list.filter(t=>{const linked=t.metadata?.kind==='counterparty_settlement'&&t.metadata.originalTransactionId?state.transactions.find(x=>x.id===t.metadata.originalTransactionId):null;return subsSelected.includes((linked||t).subcategoria);});
     if(accountsSelected.length) list=list.filter(t=>accountsSelected.includes(t.cuenta));
     if(statusSelected.length) list=list.filter(t=>statusSelected.includes(t.estado));
     if(from) list=list.filter(t=>(t.fecha||'')>=from);
@@ -2256,8 +2295,8 @@ function renderTransacciones(app){
 
     const card=document.getElementById('txListCard');
     const toCents=value=>Math.round((Number(value)||0)*100);
-    const ingresosCents=list.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+toCents(t.monto),0);
-    const gastosCents=list.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+toCents(t.monto),0);
+    const ingresosCents=list.filter(t=>t.tipo==='Ingreso'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+toCents(t.monto),0);
+    const gastosCents=list.filter(t=>t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement').reduce((sum,t)=>sum+toCents(t.monto),0)-list.filter(t=>t.metadata?.kind==='counterparty_settlement'&&t.metadata.direction==='RECEIVABLE').reduce((sum,t)=>sum+toCents(t.monto),0);
     const resultadoCents=ingresosCents-gastosCents;
     const moneyFromCents=cents=>fmtMoney(cents/100);
     const resumen=document.createElement('div');
@@ -2278,20 +2317,20 @@ function renderTransacciones(app){
     }
     card.appendChild(count);
 
-    let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
-    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td><span class="pill ${t.tipo==='Gasto'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
+    let html='<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Contraparte</th><th>Tipo</th><th>Monto</th><th>Acciones</th></tr></thead><tbody>';
+    list.forEach(t=>{html+=`<tr><td>${escapeHtml(t.fecha||'')}</td><td>${escapeHtml(t.descripcion||'')}</td><td>${escapeHtml(t.categoria||'-')}${t.subcategoria?' / '+escapeHtml(t.subcategoria):''}</td><td>${escapeHtml((t.contrapartesAsignadas||[]).map(a=>(state.contrapartes||[]).find(p=>p.id===a.contraparteId)?.nombre).filter(Boolean).join(', ')||(state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'—')}</td><td><span class="pill ${t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement'?'gasto':'ingreso'}">${escapeHtml(t.tipo||'')}</span></td><td>${fmtMoney(t.monto)}</td><td class="row-actions"><button data-edit="${t.id}" title="Editar">✏️</button><button data-del="${t.id}" title="Eliminar">🗑</button></td></tr>`;});
     html+='</tbody></table></div>';
 
     const mobileList=document.createElement('div');
     mobileList.className='tx-mobile-list';
     list.forEach(t=>{
-      const gasto=t.tipo==='Gasto';
+      const gasto=t.tipo==='Gasto'&&t.metadata?.kind!=='counterparty_settlement';
       const d=new Date((t.fecha||'')+'T00:00:00');
       const mon=Number.isNaN(d.getTime())?'':(['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'][d.getMonth()]);
       const day=Number.isNaN(d.getTime())?(t.fecha||'').slice(-2):String(d.getDate()).padStart(2,'0');
       const item=document.createElement('div');
       item.className='tx-mobile-card '+(gasto?'gasto':'ingreso');
-      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
+      item.innerHTML=`<div class="tx-mobile-main"><div class="tx-mobile-icon">${gasto?'↑':'↓'}</div><div class="tx-mobile-datebox"><div class="mon">${mon}</div><div class="day">${day}</div></div><div class="tx-mobile-info"><div class="tx-mobile-desc"></div><div class="tx-mobile-sub"></div></div><div class="tx-mobile-amount ${gasto?'gasto':'ingreso'}">${gasto?'−':'+'}${fmtMoney(t.monto).replace(/^Bs\\s*/,'')} Bs</div></div><div class="tx-mobile-bottom"><div class="tx-mobile-cat">🚗 ${escapeHtml(t.categoria||'Sin categoría')}${t.subcategoria?' · '+escapeHtml(t.subcategoria):''}</div><div class="tx-mobile-cat">👤 ${escapeHtml((t.contrapartesAsignadas||[]).map(a=>(state.contrapartes||[]).find(p=>p.id===a.contraparteId)?.nombre).filter(Boolean).join(', ')||(state.contrapartes||[]).find(p=>p.id===t.contraparteId)?.nombre||'Sin contraparte')}</div><div class="tx-mobile-actions"><button type="button" data-mobile-edit="${escapeHtml(t.id)}" title="Editar">✏️</button><button type="button" data-mobile-del="${escapeHtml(t.id)}" title="Eliminar">🗑️</button></div></div>`;
       item.querySelector('.tx-mobile-desc').textContent=t.descripcion||'Sin descripción';
       item.querySelector('.tx-mobile-sub').textContent=t.categoria?(t.categoria+(t.subcategoria?' / '+t.subcategoria:'')):'Sin categoría';
       mobileList.appendChild(item);
@@ -2304,7 +2343,7 @@ function renderTransacciones(app){
     card.appendChild(mobileList);
 
     const editHandler=id=>openEditTransaction(id);
-    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
+    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);if(tx.metadata?.kind==='counterparty_settlement'){try{if(currentUser){const result=await supabaseClient.from('transacciones').delete().eq('id',tx.id).eq('usuario_id',currentUser.id);if(result.error)throw result.error;}cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};cloudSnapshot.transactions=cloudSnapshot.transactions.filter(t=>t.id!==tx.id);saveLocal();}catch(err){state.transactions=original;saveLocal();throw err;}}else{const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
     card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.edit));
     card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.del));
     card.querySelectorAll('[data-mobile-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.mobileEdit));
@@ -2322,6 +2361,8 @@ function renderTransacciones(app){
   document.getElementById('addManualBtn').onclick=()=>openManualForm();
   renderList();
 }
+
+
 function openEditTransaction(txId){
   const tx = state.transactions.find(t=>t.id===txId);
   if(!tx) return;
@@ -2336,11 +2377,17 @@ function openEditTransaction(txId){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${c.nombre}" ${c.nombre===tx.categoria?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
       <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
+      <div class="field"><label>Personas involucradas</label><div id="eCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="eNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;">
         <button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  const eContraparte=document.getElementById('eContraparte');
+  const editAssignments=(tx.contrapartesAsignadas|| (tx.contraparteId?[{contraparteId:tx.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[])).map(a=>({...a}));
+  const renderEditAssignments=()=>{const box=document.getElementById('eCounterparties');box.innerHTML='';(state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const selected=editAssignments.find(a=>a.contraparteId===p.id);const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 112px 92px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><select aria-label="Dirección de la deuda"><option value="DEBE_REEMBOLSAR" '+(selected?.tipoParticipacion!=='USUARIO_DEBE'?'selected':'')+'>Me deben</option><option value="USUARIO_DEBE" '+(selected?.tipoParticipacion==='USUARIO_DEBE'?'selected':'')+'>Yo debo</option></select><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]');check.onchange=()=>{const ix=editAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)editAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)editAssignments.splice(ix,1);amount.disabled=!check.checked;};const direction=row.querySelector('select');direction.onchange=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.tipoParticipacion=direction.value;};amount.oninput=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};box.appendChild(row);});};
+  renderEditAssignments();
+  document.getElementById('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{editAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderEditAssignments();});
   function refreshSubs(){
     const cat=getCategory(tx.tipo,document.getElementById('eCat').value);
     const subs=cat?.subcategorias||[];
@@ -2358,6 +2405,12 @@ function openEditTransaction(txId){
     tx.monto=monto;
     tx.categoria=document.getElementById('eCat').value;
     tx.subcategoria=document.getElementById('eSub').value||null;
+    const invalidEdit=editAssignments.find(a=>!Number.isFinite(Number(a.monto))||Number(a.monto)<=0);
+    const allocatedEdit=editAssignments.reduce((sum,a)=>sum+(Number(a.monto)||0),0);
+    if(invalidEdit){showToast('Indica un importe mayor a cero para cada contraparte');return;}
+    if(allocatedEdit>monto+0.001){showToast('La suma de los reembolsos no puede superar el monto de la transacción');return;}
+    tx.contrapartesAsignadas=editAssignments.map(a=>({...a,monto:Number(a.monto)}));
+    tx.contraparteId=editAssignments[0]?.contraparteId||null;
     const result=saveState();
     if(result && typeof result.then==='function') result.then(r=>{ if(r?.cloud===false) showToast('⚠️ No se pudo guardar en la nube'); else showToast('✅ Transacción actualizada'); });
     else showToast('Transacción actualizada');
@@ -2365,6 +2418,7 @@ function openEditTransaction(txId){
     render();
   };
 }
+
 
 function openManualForm(){
   const overlay = document.createElement('div');
@@ -2382,6 +2436,7 @@ function openManualForm(){
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="mMonto" placeholder="0" onfocus="this.select()"></div>
       <div class="field"><label>Categoría</label><select id="mCat"></select></div>
       <div class="field"><label>Subcategoría</label><select id="mSub"><option value="">(ninguna)</option></select></div>
+      <div class="field"><label>Personas involucradas</label><div id="mCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="mNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
       <div class="row-actions" style="justify-content:flex-end;margin-top:10px;">
         <button class="btn secondary" id="mCancel">Cancelar</button>
         <button class="btn" id="mSave">Guardar</button>
@@ -2389,6 +2444,11 @@ function openManualForm(){
     </div>
   `;
   document.body.appendChild(overlay);
+  const mContraparte=document.getElementById('mContraparte');
+  const manualAssignments=[];
+  const renderManualAssignments=()=>{const box=document.getElementById('mCounterparties');box.innerHTML='';(state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const selected=manualAssignments.find(a=>a.contraparteId===p.id);const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 112px 92px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><select aria-label="Dirección de la deuda"><option value="DEBE_REEMBOLSAR" '+(selected?.tipoParticipacion!=='USUARIO_DEBE'?'selected':'')+'>Me deben</option><option value="USUARIO_DEBE" '+(selected?.tipoParticipacion==='USUARIO_DEBE'?'selected':'')+'>Yo debo</option></select><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]');check.onchange=()=>{const ix=manualAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)manualAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)manualAssignments.splice(ix,1);amount.disabled=!check.checked;};const direction=row.querySelector('select');direction.onchange=()=>{const a=manualAssignments.find(a=>a.contraparteId===p.id);if(a)a.tipoParticipacion=direction.value;};amount.oninput=()=>{const a=manualAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};box.appendChild(row);});};
+  renderManualAssignments();
+  document.getElementById('mNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{manualAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderManualAssignments();});
 
   function refreshCats(){
     const tipo = document.getElementById('mTipo').value;
@@ -2411,6 +2471,10 @@ function openManualForm(){
   document.getElementById('mSave').onclick = ()=>{
     const monto = parseAmount(document.getElementById('mMonto').value);
     if(!monto || monto<=0){ showToast('Ingresa un monto válido'); return; }
+    const invalidManual=manualAssignments.find(a=>!Number.isFinite(Number(a.monto))||Number(a.monto)<=0);
+    const allocatedManual=manualAssignments.reduce((sum,a)=>sum+(Number(a.monto)||0),0);
+    if(invalidManual){showToast('Indica un importe mayor a cero para cada contraparte');return;}
+    if(allocatedManual>monto+0.001){showToast('La suma de los reembolsos no puede superar el monto de la transacción');return;}
     state.transactions.push({
       id: uid('tx'),
       fecha: document.getElementById('mFecha').value,
@@ -2419,6 +2483,8 @@ function openManualForm(){
       tipo: document.getElementById('mTipo').value,
       categoria: document.getElementById('mCat').value,
       subcategoria: document.getElementById('mSub').value || null,
+      contraparteId: manualAssignments[0]?.contraparteId||null,
+      contrapartesAsignadas: manualAssignments.map(a=>({...a,monto:Number(a.monto)})),
       cuenta: 'Manual',
       origen: 'manual',
       estado: 'categorizado',
@@ -2430,6 +2496,7 @@ function openManualForm(){
     render();
   };
 }
+
 
 function savePendingAssignment(tx,newRuleIds=[]){
   // La UI no espera a Supabase. El cambio queda en local y entra al journal
@@ -4647,5 +4714,112 @@ document.addEventListener('click', async (event) => {
 :root[data-theme="dark"] .nexo-greeting h1{color:#e8eef9!important;}
 :root[data-theme="dark"] .nexo-greeting p{color:#9aa8bc!important;}
 </style>
+<script id="nexo-counterparty-accounting-v1">
+/* Estado de cuenta por contraparte: cuentas por cobrar y por pagar. */
+(function(){
+  if(window.__nexoCounterpartyAccountingV1)return;
+  window.__nexoCounterpartyAccountingV1=true;
+  const cents=v=>Math.round((Number(v)||0)*100);
+  const money=v=>fmtMoney((v||0)/100);
+  function assignments(tx){return tx.contrapartesAsignadas|| (tx.contraparteId?[{contraparteId:tx.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[]);}
+  function getAccount(p){
+    const principal=[];
+    (state.transactions||[]).forEach(tx=>{
+      if(tx.metadata?.kind==='counterparty_settlement')return;
+      assignments(tx).filter(a=>a.contraparteId===p.id).forEach(a=>{
+        const amount=cents(a.monto||0);
+        if(!amount)return;
+        const direction=a.tipoParticipacion==='USUARIO_DEBE'?'PAYABLE':'RECEIVABLE';
+        principal.push({tx,direction,amount});
+      });
+    });
+    const settlements=(state.transactions||[]).filter(tx=>tx.metadata?.kind==='counterparty_settlement'&&tx.metadata?.counterpartyId===p.id);
+    let receivable=principal.filter(x=>x.direction==='RECEIVABLE').reduce((n,x)=>n+x.amount,0);
+    let payable=principal.filter(x=>x.direction==='PAYABLE').reduce((n,x)=>n+x.amount,0);
+    let received=0,paid=0;
+    settlements.forEach(tx=>{
+      const amount=cents(tx.monto);
+      if(tx.metadata.direction==='RECEIVABLE')received+=amount;
+      if(tx.metadata.direction==='PAYABLE')paid+=amount;
+    });
+    return {principal,settlements,receivable, payable, received, paid, receivableBalance:receivable-received,payableBalance:payable-paid};
+  }
+  window.nexoCounterpartyAccount=getAccount;
+  window.renderContrapartes=function(app){
+    const wrap=document.createElement('div');
+    const accounts=(state.contrapartes||[]).map(p=>({p,a:getAccount(p)}));
+    const total=(key)=>accounts.reduce((n,x)=>n+x.a[key],0);
+    const head=document.createElement('div');head.className='card';
+    head.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 5px">Contrapartes</h2><p style="margin:0;color:var(--muted);font-size:.88rem">Estado de cuenta individual: deudas por cobrar y por pagar.</p></div><button class="btn" id="addCounterparty">+ Nueva contraparte</button></div>';
+    wrap.appendChild(head);
+    const summary=document.createElement('div');summary.className='grid2';
+    summary.innerHTML='<div class="card"><div style="color:var(--muted);font-size:.78rem">TOTAL POR COBRAR</div><div style="font-size:1.45rem;font-weight:800;color:var(--green)">'+money(total('receivableBalance'))+'</div><small style="color:var(--muted)">Recuperado: '+money(total('received'))+'</small></div><div class="card"><div style="color:var(--muted);font-size:.78rem">TOTAL POR PAGAR</div><div style="font-size:1.45rem;font-weight:800;color:var(--red)">'+money(total('payableBalance'))+'</div><small style="color:var(--muted)">Pagado: '+money(total('paid'))+'</small></div>';
+    wrap.appendChild(summary);
+    const list=document.createElement('div');list.className='card';wrap.appendChild(list);
+    if(!accounts.length)list.innerHTML='<div class="empty">Todavía no tienes contrapartes registradas.</div>';
+    else{
+      list.innerHTML='<div style="display:grid;gap:10px">'+accounts.sort((a,b)=>a.p.nombre.localeCompare(b.p.nombre,'es')).map(({p,a})=>'<details style="border:1px solid var(--border);border-radius:12px;padding:12px"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><span><strong>'+escapeHtml(p.nombre)+'</strong><small style="display:block;color:var(--muted)">'+escapeHtml(p.tipo||'Persona')+' · '+escapeHtml(p.telefono||p.email||'Sin contacto')+'</small></span><span style="text-align:right;font-size:.82rem"><span style="color:var(--green)">Por cobrar '+money(a.receivableBalance)+'</span><br><span style="color:var(--red)">Por pagar '+money(a.payableBalance)+'</span></span></summary><div style="margin-top:12px"><div class="grid2"><div><small style="color:var(--muted)">Debe reembolsarte</small><strong style="display:block;color:var(--green)">'+money(a.receivable)+'</strong><small>Recuperado: '+money(a.received)+'</small></div><div><small style="color:var(--muted)">Tú debes</small><strong style="display:block;color:var(--red)">'+money(a.payable)+'</strong><small>Pagado: '+money(a.paid)+'</small></div></div><div class="row-actions" style="margin:12px 0"><button data-settle="'+p.id+'">Registrar pago / devolución</button><button data-edit-cp="'+p.id+'">Editar</button><button data-toggle-cp="'+p.id+'">'+(p.activo===false?'Activar':'Desactivar')+'</button></div><h4 style="margin:12px 0 6px">Movimientos de origen</h4>'+a.principal.map(x=>'<div style="padding:8px 0;border-top:1px solid var(--border);font-size:.82rem"><strong>'+escapeHtml(x.tx.descripcion||'Movimiento')+'</strong> · '+escapeHtml(x.tx.fecha||'')+'<br><span style="color:'+(x.direction==='RECEIVABLE'?'var(--green)':'var(--red)')+'">'+(x.direction==='RECEIVABLE'?'Te deben':'Tú debes')+' '+money(x.amount)+'</span></div>').join('')+'<h4 style="margin:12px 0 6px">Pagos y devoluciones</h4>'+a.settlements.map(x=>'<div style="padding:8px 0;border-top:1px solid var(--border);font-size:.82rem"><strong>'+escapeHtml(x.descripcion||'Pago')+'</strong> · '+escapeHtml(x.fecha||'')+'<br>'+((x.metadata.direction==='RECEIVABLE'?'Recibiste ':'Pagaste ')+money(cents(x.monto)))+'</div>').join('')+(a.principal.length||a.settlements.length?'':'<div class="empty">Sin movimientos financieros asociados.</div>')+'</div></details>').join('')+'</div>';
+      list.querySelectorAll('[data-edit-cp]').forEach(b=>b.onclick=e=>{e.preventDefault();openCounterpartyForm(b.dataset.editCp);});
+      list.querySelectorAll('[data-toggle-cp]').forEach(b=>b.onclick=e=>{e.preventDefault();const p=state.contrapartes.find(x=>x.id===b.dataset.toggleCp);if(!p)return;p.activo=p.activo===false;saveState();render();});
+      list.querySelectorAll('[data-settle]').forEach(b=>b.onclick=e=>{e.preventDefault();openSettlement(b.dataset.settle);});
+    }
+    head.querySelector('#addCounterparty').onclick=()=>openCounterpartyForm();
+    app.appendChild(wrap);
+  };
+  function openSettlement(counterpartyId){
+    const p=(state.contrapartes||[]).find(x=>x.id===counterpartyId);if(!p)return;
+    const acc=getAccount(p);
+    const overlay=document.createElement('div');overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    overlay.innerHTML='<div class="card" style="width:min(440px,100%);max-height:90vh;overflow:auto"><h3>Registrar pago / devolución</h3><p style="color:var(--muted)">'+escapeHtml(p.nombre)+'</p><div class="field"><label>Dirección</label><select id="stDirection"><option value="RECEIVABLE">Me devolvió / recibí dinero</option><option value="PAYABLE">Le pagué / devolví dinero</option></select></div><div class="field"><label>Importe (Bs)</label><input id="stAmount" type="number" min="0.01" step="0.01"></div><div class="field"><label>Fecha</label><input id="stDate" type="date" value="'+new Date().toISOString().slice(0,10)+'"></div><div class="field"><label>Descripción</label><input id="stDesc" type="text" value="Pago / devolución - '+escapeHtml(p.nombre)+'"></div><div class="field"><label>Movimiento original (opcional)</label><select id="stOriginal"><option value="">Sin vincular a uno específico</option>'+acc.principal.map(x=>'<option value="'+escapeHtml(x.tx.id)+'">'+escapeHtml(x.tx.fecha+' · '+x.tx.descripcion+' · '+money(x.amount))+'</option>').join('')+'</select></div><div class="row-actions" style="justify-content:flex-end"><button class="btn secondary" id="stCancel">Cancelar</button><button class="btn" id="stSave">Guardar movimiento</button></div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('#stCancel').onclick=()=>overlay.remove();
+    overlay.querySelector('#stSave').onclick=async()=>{
+      const button=overlay.querySelector('#stSave');
+      if(button.disabled)return;
+      const direction=overlay.querySelector('#stDirection').value;
+      const amount=Number(overlay.querySelector('#stAmount').value);
+      const date=overlay.querySelector('#stDate').value;
+      const description=overlay.querySelector('#stDesc').value.trim();
+      const originalId=overlay.querySelector('#stOriginal').value||null;
+      if(!Number.isFinite(amount)||amount<=0||!date){showToast('Revisa el importe y la fecha');return;}
+      const type=direction==='RECEIVABLE'?'Ingreso':'Gasto';
+      const category=state.categories.find(c=>c.tipo===type);
+      if(!category){showToast('No existe una categoría de '+(type==='Ingreso'?'ingreso':'gasto')+' para registrar el movimiento');return;}
+      const tx={id:crypto.randomUUID(),fecha:date,descripcion:description||'Pago / devolución',monto:amount,tipo:type,categoria:category.nombre,subcategoria:null,cuenta:'Manual',origen:'manual',estado:'categorizado',refId:null,contraparteId:counterpartyId,contrapartesAsignadas:[],metadata:{kind:'counterparty_settlement',direction,counterpartyId,originalTransactionId:originalId}};
+      button.disabled=true;
+      button.textContent='Guardando…';
+      state.transactions.push(tx);
+      saveLocal();
+      try{
+        if(currentUser){
+          const catKey=type+'|'+category.nombre;
+          let categoryId=cloudEntityCache.categories.get(catKey);
+          if(!UUID_RE.test(categoryId||'')) throw new Error('No se encontró el identificador de la categoría en la nube.');
+          const row={id:tx.id,usuario_id:currentUser.id,fecha:tx.fecha,descripcion:tx.descripcion,monto:tx.monto,tipo:tx.tipo,contraparte_id:counterpartyId,categoria_id:categoryId,subcategoria_id:null,cuenta:tx.cuenta,origen:tx.origen,estado:tx.estado,referencia_id:null,metadata:tx.metadata};
+          const result=await supabaseClient.from('transacciones').insert(row);
+          if(result.error)throw result.error;
+          cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};
+          cloudSnapshot.transactions.push({...tx});
+          cloudActive=true;
+        }else{
+          showToast('Guardado localmente. Se sincronizará al iniciar sesión.');
+        }
+        saveLocal();
+        overlay.remove();
+        render();
+        showToast('Movimiento guardado correctamente');
+      }catch(error){
+        state.transactions=state.transactions.filter(x=>x.id!==tx.id);
+        saveLocal();
+        console.error('Error guardando pago/devolución:',error);
+        showToast('No se pudo guardar. No se registró el movimiento; intenta nuevamente.');
+        button.disabled=false;
+        button.textContent='Guardar movimiento';
+      }
+    };
+  }
+})();
+</script>
+
 </body>
 </html>
