@@ -21,7 +21,8 @@ test('multi-counterparty UI validates and persists individual shares',()=>{
  assert.match(html,/allocatedEdit>monto\\+0\\.001/);
  assert.match(html,/allocatedManual>monto\\+0\\.001/);
  assert.match(html,/from\('transaccion_contrapartes'\)\.select\('\*'\)/);
- assert.match(html,/from\('transaccion_contrapartes'\)\.delete\(\)/);\n assert.match(html,/insert\(assignments\)/);
+ assert.match(html,/from\('transaccion_contrapartes'\)\.delete\(\)/);
+ assert.match(html,/insert\(assignments\)/);
 });
 test('base migration isolates counterparties and related transactions by owner',()=>{
  assert.match(migration1,/create table public\.contrapartes/);
