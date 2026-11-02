@@ -51,7 +51,7 @@ test('allocation migration enforces same-user ownership and positive amount',()=
 
 test('account reset removes counterparties after deleting related transactions',()=>{
   assert.ok(migration3.includes('create or replace function public.reset_my_finanzas()'));
-  assert.ok(migration3.includes('v_user_id := (select auth.uid())'));
+  assert.ok(migration3.includes('v_user_id uuid := (select auth.uid())'));
   assert.ok(migration3.includes("raise exception 'No authenticated user'"));
   assert.ok(migration3.includes('delete from public.contrapartes where usuario_id = v_user_id'));
   assert.ok(migration3.includes('set search_path to'));
