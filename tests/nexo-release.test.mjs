@@ -18,8 +18,8 @@ test('multi-counterparty UI validates and persists individual shares',()=>{
  assert.match(html,/id="eCounterparties"/);
  assert.match(html,/id="mCounterparties"/);
  assert.match(html,/contrapartesAsignadas/);
- assert.match(html,/allocatedEdit>monto/);
- assert.match(html,/allocatedManual>monto/);
+ assert.match(html,/allocatedEdit>monto\\+0\\.001/);
+ assert.match(html,/allocatedManual>monto\\+0\\.001/);
  assert.match(html,/from\('transaccion_contrapartes'\)\.select\('\*'\)/);
  assert.match(html,/from\('transaccion_contrapartes'\)\.delete\(\)/);\n assert.match(html,/insert\(assignments\)/);
 });
