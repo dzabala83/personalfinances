@@ -1693,7 +1693,7 @@ function syncUserChrome(){
 const TABS = [
   {id:'dashboard', label:'📊 Resumen'},
   {id:'transacciones', label:'📄 Transacciones'},
-  {id:'contrapartes', label:'👥 Contrapartes'},
+  {id:'contrapartes', label:'🤝 Contrapartes'},1
   {id:'pendientes', label:'❓ Pendientes'},
   {id:'categorias', label:'🏷️ Categorías'},
   {id:'subir', label:'⬆️ Subir extracto'},
@@ -4377,12 +4377,13 @@ document.addEventListener('click', async (event) => {
 
     const findBtn=(word)=>[...nav.querySelectorAll('button')].find(b=>(b.textContent||'').toLowerCase().includes(word));
     const pending=findBtn('pendientes');
-    const categories=findBtn('categorías')||findBtn('categorias');
+    const counterparties=findBtn('contrapartes');
+    const categories=findBtn('categorías')||findBtn('categorias');,1
     const backup=findBtn('backup');
     const logout=document.getElementById('logoutBtn');
-    if(!pending&&!categories&&!backup&&!logout)return;
+    if(!pending&&!counterparties&&!categories&&!backup&&!logout)return;
 
-    [pending,categories,backup].filter(Boolean).forEach(b=>b.dataset.mobileRadialHidden='1');
+    [pending,counterparties,categories,backup].filter(Boolean).forEach(b=>b.dataset.mobileRadialHidden='1');
 
     const menu=document.createElement('div');
     menu.id='mobileRadialMenu';
@@ -4390,6 +4391,7 @@ document.addEventListener('click', async (event) => {
       '<button class="radial-center" type="button" aria-label="Abrir menú">☰</button>'+
       '<div class="radial-panel" aria-label="Menú rápido">'+
         '<button class="radial-item radial-pend" type="button" aria-label="Pendientes"><span class="ri">❓</span></button>'+
+        '<button class="radial-item radial-counterparties" type="button" aria-label="Contrapartes"><span class="ri">🤝</span></button>'+
         '<button class="radial-item radial-cat" type="button" aria-label="Categorías"><span class="ri">🏷️</span></button>'+
         '<button class="radial-item radial-upload" type="button" aria-label="Subir extracto"><span class="ri">⬆️</span></button>'+
         '<button class="radial-item radial-backup" type="button" aria-label="Backup"><span class="ri">💾</span></button>'+
@@ -4417,7 +4419,7 @@ document.addEventListener('click', async (event) => {
       center.style.left=cx+'px';
       center.style.top=cy+'px';
 
-      const panelW=64, panelH=5*48+4*8+20+14;
+      const panelW=64, panelH=6*48+5*8+20+14;
       let px,py;
 
       // Keep the menu attached to the same edge while ensuring it stays on-screen.
@@ -4515,6 +4517,7 @@ document.addEventListener('click', async (event) => {
       b.addEventListener('click',run);
     };
     bindAction('.radial-pend',()=>go('pendientes'));
+    bindAction('.radial-counterparties',()=>go('contrapartes'));
     bindAction('.radial-cat',()=>go('categorias'));
     bindAction('.radial-upload',()=>go('subir'));
     bindAction('.radial-backup',()=>go('backup'));
