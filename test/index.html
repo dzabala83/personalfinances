@@ -2378,7 +2378,40 @@ function renderTransacciones(app){
     card.appendChild(mobileList);
 
     const editHandler=id=>openEditTransaction(id);
-    const deleteHandler=id=>{const tx=state.transactions.find(t=>t.id===id);if(!tx)return;showDeleteTransactionModal(tx,async()=>{const original=state.transactions.slice();state.transactions=state.transactions.filter(t=>t.id!==tx.id);if(tx.metadata?.kind==='counterparty_settlement'){try{if(currentUser){const result=await supabaseClient.from('transacciones').delete().eq('id',tx.id).eq('usuario_id',currentUser.id);if(result.error)throw result.error;}cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};cloudSnapshot.transactions=cloudSnapshot.transactions.filter(t=>t.id!==tx.id);saveLocal();}catch(err){state.transactions=original;saveLocal();throw err;}}else{const result=await saveState();if(!result.cloud){state.transactions=original;throw(result.error||new Error('No se pudo sincronizar con Supabase'));}}renderList();renderNav();showToast('Transacción eliminada y sincronizada.');});};
+    const deleteHandler=id=>{
+      const tx=state.transactions.find(t=>t.id===id);
+      if(!tx)return;
+      showDeleteTransactionModal(tx,async()=>{
+        const original=state.transactions.slice();
+        const originalSnapshot=cloudSnapshot?.transactions?.map(t=>({...t}))||null;
+        try{
+          // Una eliminación es una operación puntual: no debe ejecutar saveState(),
+          // que también sincroniza categorías, reglas, asignaciones y presupuestos.
+          if(currentUser && UUID_RE.test(String(tx.id||''))){
+            const {data,error}=await supabaseClient.from('transacciones')
+              .delete().eq('id',tx.id).eq('usuario_id',currentUser.id).select('id');
+            if(error)throw error;
+            if(!data?.length)throw new Error('Supabase no confirmó la eliminación. Actualiza la lista e inténtalo nuevamente.');
+          }else if(!currentUser && UUID_RE.test(String(tx.id||''))){
+            throw new Error('No hay una sesión activa. Vuelve a iniciar sesión para eliminar esta transacción.');
+          }
+          state.transactions=state.transactions.filter(t=>t.id!==tx.id);
+          if(cloudSnapshot?.transactions){
+            cloudSnapshot.transactions=cloudSnapshot.transactions.filter(t=>t.id!==tx.id);
+          }
+          saveLocal();
+          renderList();
+          renderNav();
+          showToast('Transacción eliminada correctamente.');
+        }catch(err){
+          state.transactions=original;
+          if(cloudSnapshot && originalSnapshot)cloudSnapshot.transactions=originalSnapshot;
+          saveLocal();
+          console.error('Error eliminando transacción:',err);
+          throw err;
+        }
+      });
+    };
     card.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.edit));
     card.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>deleteHandler(b.dataset.del));
     card.querySelectorAll('[data-mobile-edit]').forEach(b=>b.onclick=()=>editHandler(b.dataset.mobileEdit));
