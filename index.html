@@ -4778,6 +4778,49 @@ document.addEventListener('click', async (event) => {
     return {principal,settlements,receivable, payable, received, paid, receivableBalance:receivable-received,payableBalance:payable-paid};
   }
   window.nexoCounterpartyAccount=getAccount;
+  function openCounterpartyForm(counterpartyId=null,onSaved=null){
+    const existing=counterpartyId?(state.contrapartes||[]).find(p=>p.id===counterpartyId):null;
+    if(counterpartyId&&!existing){showToast('No se encontró la persona/comercio');return;}
+    const overlay=document.createElement('div');
+    overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px';
+    overlay.innerHTML='<div class="card" style="width:min(440px,100%);max-height:90vh;overflow:auto"><h3>'+(existing?'Editar persona/comercio':'Nueva persona/comercio')+'</h3><div class="field"><label>Nombre</label><input id="cpName" type="text" maxlength="120" required placeholder="Nombre de la persona o empresa"></div><div class="field"><label>Tipo</label><select id="cpType"><option value="Persona">Persona</option><option value="Empresa">Empresa / Comercio</option></select></div><div class="field"><label>Teléfono (opcional)</label><input id="cpPhone" type="tel" maxlength="40" placeholder="Teléfono"></div><div class="field"><label>Correo electrónico (opcional)</label><input id="cpEmail" type="email" maxlength="160" placeholder="correo@ejemplo.com"></div><div class="field"><label>Notas (opcional)</label><textarea id="cpNotes" rows="3" maxlength="500" placeholder="Notas adicionales"></textarea></div><div class="row-actions" style="justify-content:flex-end;gap:8px"><button type="button" class="btn secondary" id="cpCancel">Cancelar</button><button type="button" class="btn" id="cpSave">'+(existing?'Guardar cambios':'Crear persona/comercio')+'</button></div></div>';
+    document.body.appendChild(overlay);
+    const $=id=>overlay.querySelector('#'+id);
+    $('cpName').value=existing?.nombre||'';
+    $('cpType').value=existing?.tipo||'Persona';
+    $('cpPhone').value=existing?.telefono||'';
+    $('cpEmail').value=existing?.email||'';
+    $('cpNotes').value=existing?.notas||'';
+    $('cpCancel').onclick=()=>overlay.remove();
+    $('cpSave').onclick=async()=>{
+      const name=$('cpName').value.trim();
+      if(!name){showToast('Ingresa el nombre de la persona o comercio');$('cpName').focus();return;}
+      const email=$('cpEmail').value.trim();
+      if(email&&!$('cpEmail').checkValidity()){showToast('Ingresa un correo electrónico válido');$('cpEmail').focus();return;}
+      const button=$('cpSave');
+      if(button.disabled)return;
+      const previous=existing?{...existing}:null;
+      const person=existing||{id:crypto.randomUUID(),activo:true};
+      Object.assign(person,{nombre:name,tipo:$('cpType').value,telefono:$('cpPhone').value.trim(),email,notas:$('cpNotes').value.trim(),activo:person.activo!==false});
+      if(!existing)(state.contrapartes||(state.contrapartes=[])).push(person);
+      button.disabled=true;button.textContent='Guardando…';
+      const result=await saveState();
+      if(result?.cloud===false&&currentUser){
+        if(existing)Object.assign(existing,previous);
+        else state.contrapartes=state.contrapartes.filter(p=>p.id!==person.id);
+        saveLocal();
+        button.disabled=false;button.textContent=existing?'Guardar cambios':'Crear persona/comercio';
+        showToast('No se pudo guardar en la nube. Verifica tu conexión e inténtalo nuevamente.');
+        return;
+      }
+      overlay.remove();
+      if(typeof onSaved==='function')onSaved(person);
+      else render();
+      showToast(existing?'Persona/comercio actualizado':'Persona/comercio creado');
+    };
+    setTimeout(()=> $('cpName').focus(),0);
+  }
+  window.openCounterpartyForm=openCounterpartyForm;
   window.renderContrapartes=function(app){
     const wrap=document.createElement('div');
     const accounts=(state.contrapartes||[]).map(p=>({p,a:getAccount(p)}));
