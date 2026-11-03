@@ -1322,7 +1322,6 @@ async function auditSupabaseConnection(){
 }
 
 async function syncStateToCloud(){
-  const liveState=state;
   const liveTxById=new Map((state.transactions||[]).map(t=>[t.id,t]));
   const liveCatByKey=new Map((state.categories||[]).map(c=>[c.tipo+'|'+c.nombre,c]));
   const liveRuleById=new Map((state.rules||[]).map(r=>[r.id,r]));
@@ -1716,6 +1715,7 @@ async function initApp(){
     cloudActive=false;
     finishInit();
     render();
+    if(readStateSyncMarker())scheduleStateSync(0);
     showToast('No se pudo conectar a la nube. Usando datos locales.');
   }
 }
