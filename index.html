@@ -2743,17 +2743,17 @@ function showDeleteTransactionModal(tx, onConfirm){
         </div>
       </div>
       <div style="margin-top:16px;padding:11px;border-radius:9px;background:rgba(220,38,38,.09);color:#dc2626;font-size:.85rem;font-weight:600;">
-        Revisa los datos antes de confirmar. Debes esperar 10 segundos.
+        Revisa los datos antes de confirmar. Debes esperar 5 segundos.
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
         <button type="button" id="cancelDeleteTransaction" class="btn">Cancelar</button>
-        <button type="button" id="confirmDeleteTransaction" class="btn" disabled style="background:#dc2626;color:#fff;opacity:.55;cursor:not-allowed;">Eliminar (10)</button>
+        <button type="button" id="confirmDeleteTransaction" class="btn" disabled style="background:#dc2626;color:#fff;opacity:.55;cursor:not-allowed;">Eliminar (5)</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   const cancel=overlay.querySelector('#cancelDeleteTransaction');
   const confirm=overlay.querySelector('#confirmDeleteTransaction');
-  let seconds=10;
+  let seconds=5;
   const timer=setInterval(()=>{
     seconds--;
     if(seconds>0){
@@ -4851,6 +4851,139 @@ document.addEventListener('click', async (event) => {
       }
     };
   }
+})();
+</script>
+
+
+<script id="nexo-refunds-v1">
+/* Reembolsos como movimientos independientes: nunca se suman a ingresos ordinarios. */
+(function(){
+  if(window.__nexoRefundsV1)return;
+  window.__nexoRefundsV1=true;
+  const isRefund=tx=>tx?.metadata?.kind==='refund';
+  const today=()=>new Date().toISOString().slice(0,10);
+  const escape=window.escapeHtml||((v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+  function openRefundForm(prefillCounterpartyId){
+    const original=window.openManualForm;
+    if(typeof original!=='function')return;
+    window.__nexoRefundPrefill=prefillCounterpartyId||null;
+    original({refund:true,counterpartyId:prefillCounterpartyId||null});
+    window.__nexoRefundPrefill=null;
+  }
+  const originalManual=window.openManualForm;
+  if(typeof originalManual==='function'){
+    window.openManualForm=function(opts={}){
+      originalManual();
+      const type=document.getElementById('mTipo');
+      const save=document.getElementById('mSave');
+      const overlay=type?.closest('.card')?.parentElement;
+      if(!type||!save||!overlay)return;
+      if(![...type.options].some(o=>o.value==='Reembolso')){
+        const option=document.createElement('option');option.value='Reembolso';option.textContent='Reembolso';type.appendChild(option);
+      }
+      const catField=document.getElementById('mCat')?.closest('.field');
+      const subField=document.getElementById('mSub')?.closest('.field');
+      const counterpartField=document.getElementById('mCounterparties')?.closest('.field');
+      const counterpartCreate=document.getElementById('mNewContraparte');
+      const refundPanel=document.createElement('div');
+      refundPanel.id='mRefundFields';
+      refundPanel.style.display='none';
+      refundPanel.innerHTML=`
+        <div class="field"><label>Contraparte (opcional)</label><select id="mRefundCounterparty"><option value="">Sin contraparte</option>${(state.contrapartes||[]).filter(p=>p.activo!==false).map(p=>'<option value="'+escape(p.id)+'">'+escape(p(p.nombre))+'</option>').join('')}</select></div>
+        <div class="field"><label>Gasto original (opcional)</label><select id="mRefundOriginal"><option value="">Sin vincular a un gasto</option>${(state.transactions||[]).filter(t=>t.tipo==='Gasto'&&!isRefund(t)).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))).map(t=>'<option value="'+escape(t.id)+'">'+escape(t.fecha||'')+' · '+escape(t.descripcion||'Gasto')+' · '+escape(fmtMoney(Number(t.monto)||0))+'</option>').join('')}</select><small style="color:var(--muted)">Vincúlalo para consultar el gasto neto y mantener la trazabilidad.</small></div>
+        <div style="padding:10px 12px;border-radius:10px;background:var(--green-soft);color:var(--green);font-size:.82rem;margin-bottom:10px">El reembolso aumenta el saldo, pero no se contabiliza como ingreso ordinario.</div>`;
+      const desc=document.getElementById('mDesc');
+      const amount=document.getElementById('mMonto');
+      (amount?.closest('.field')||type.closest('.field')).insertAdjacentElement('afterend',refundPanel);
+      const oldTypeChange=type.onchange;
+      const update=()=>{
+        const refund=type.value==='Reembolso';
+        refundPanel.style.display=refund?'block':'none';
+        if(catField)catField.style.display=refund?'none':'';
+        if(subField)subField.style.display=refund?'none':'';
+        if(counterpartField)counterpartField.style.display=refund?'none':'';
+        if(counterpartCreate)counterpartCreate.style.display=refund?'none':'';
+        if(desc&&refund&&!desc.value)desc.value='Reembolso recibido';
+      };
+      type.onchange=function(){if(type.value!=='Reembolso'&&oldTypeChange)oldTypeChange.call(type);update();};
+      if(opts.refund||window.__nexoRefundPrefill){
+        type.value='Reembolso';
+        const cp=document.getElementById('mRefundCounterparty');
+        if(cp)cp.value=opts.counterpartyId||window.__nexoRefundPrefill||'';
+      }
+      update();
+      const normalSave=save.onclick;
+      save.onclick=async function(){
+        if(type.value!=='Reembolso'){if(normalSave)normalSave.call(save);return;}
+        const monto=parseAmount(document.getElementById('mMonto').value);
+        const fecha=document.getElementById('mFecha').value||today();
+        const descripcion=document.getElementById('mDesc').value.trim()||'Reembolso recibido';
+        const contraparteId=document.getElementById('mRefundCounterparty').value||null;
+        const originalId=document.getElementById('mRefundOriginal').value||null;
+        const originalTx=originalId?(state.transactions||[]).find(t=>t.id===originalId):null;
+        if(!monto||monto<=0){showToast('Ingresa un monto válido');return;}
+        if(originalId&&!originalTx){showToast('No se encontró el gasto original. Actualiza e inténtalo nuevamente.');return;}
+        if(originalTx&&originalTx.tipo!=='Gasto'){showToast('Solo puedes vincular un reembolso a un gasto.');return;}
+        const tx={id:crypto.randomUUID(),fecha,descripcion,monto,tipo:'Ingreso',categoria:null,subcategoria:null,cuenta:'Manual',origen:'manual',estado:'categorizado',refId:null,contraparteId,contrapartesAsignadas:[],metadata:{kind:'refund',direction:'RECEIVABLE',counterpartyId:contraparteId,originalTransactionId:originalId,originalAmount:originalTx?Number(originalTx.monto)||0:null}};
+        save.disabled=true;save.textContent='Guardando…';
+        let inserted=false,relationInserted=false;
+        try{
+          if(currentUser){
+            const row={id:tx.id,usuario_id:currentUser.id,fecha:tx.fecha,descripcion:tx.descripcion,monto:tx.monto,tipo:'Ingreso',categoria_id:null,subcategoria_id:null,cuenta:tx.cuenta,origen:tx.origen,estado:tx.estado,referencia_id:null,contraparte_id:contraparteId,metadata:tx.metadata};
+            const result=await supabaseClient.from('transacciones').insert(row);
+            if(result.error)throw result.error;
+            inserted=true;
+            if(originalTx&&UUID_RE.test(String(originalTx.id||''))){
+              const rel=await supabaseClient.from('transacciones_relacionadas').insert({usuario_id:currentUser.id,transaccion_id:originalTx.id,transaccion_relacionada_id:tx.id,tipo_relacion:'REEMBOLSO',monto_relacionado:monto,notas:'Reembolso vinculado'});
+              if(rel.error)throw rel.error;
+              relationInserted=true;
+            }
+            cloudSnapshot=cloudSnapshot||{transactions:[],rules:[],budgetSignature:null};
+            cloudSnapshot.transactions.push({...tx});
+            cloudActive=true;
+          }
+          state.transactions.push(tx);
+          saveLocal();
+          overlay.remove();
+          render();
+          showToast('Reembolso registrado correctamente');
+        }catch(err){
+          if(inserted&&currentUser){
+            if(relationInserted)await supabaseClient.from('transacciones_relacionadas').delete().eq('usuario_id',currentUser.id).eq('transaccion_relacionada_id',tx.id);
+            await supabaseClient.from('transacciones').delete().eq('usuario_id',currentUser.id).eq('id',tx.id);
+          }
+          console.error('Error registrando reembolso:',err);
+          showToast('No se pudo guardar el reembolso. No se registró el movimiento.');
+          save.disabled=false;save.textContent='Guardar';
+        }
+      };
+    };
+  }
+  const oldRenderCounterparties=window.renderContrapartes;
+  if(typeof oldRenderCounterparties==='function'){
+    window.renderContrapartes=function(app){
+      oldRenderCounterparties(app);
+      app.querySelectorAll('details').forEach(detail=>{
+        const summary=detail.querySelector('summary');
+        const name=summary?.querySelector('strong')?.textContent||'';
+        const p=(state.contrapartes||[]).find(x=>x.nombre===name);
+        if(!p||detail.querySelector('[data-add-refund]'))return;
+        const actions=detail.querySelector('.row-actions');
+        if(!actions)return;
+        const button=document.createElement('button');
+        button.type='button';button.textContent='＋ Registrar reembolso';button.dataset.addRefund=p.id;
+        button.style.cssText='border-color:var(--green);color:var(--green);font-weight:700';
+        actions.insertBefore(button,actions.firstChild);
+        button.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();openRefundForm(p.id);});
+      });
+    };
+  }
+  window.nexoIsRefund=isRefund;
+  window.nexoRefundTotalForPeriod=function(transactions){
+    const ids=new Set((transactions||[]).filter(t=>t.tipo==='Gasto'&&!isRefund(t)).map(t=>t.id));
+    return (state.transactions||[]).filter(t=>isRefund(t)&&t.metadata?.originalTransactionId&&ids.has(t.metadata.originalTransactionId)).reduce((n,t)=>n+(Number(t.monto)||0),0);
+  };
+  window.nexoOrdinaryIncome=tx=>(tx||[]).filter(t=>t.tipo==='Ingreso'&&!isRefund(t));
 })();
 </script>
 
