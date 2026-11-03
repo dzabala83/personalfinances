@@ -84,8 +84,8 @@ test('pending assignment allows category without subcategory and still queues',(
 });
 
 test('state sync uses entity cache instead of full category/subcategory SELECTs',()=>{
-  const start=html.indexOf('async function saveState(){');
-  const end=html.indexOf('\nasync function initApp(){',start);
+  const start=html.indexOf('async function syncStateToCloud(){');
+  const end=html.indexOf('/* ================= LOCAL-FIRST STATE SYNC',start);
   assert.ok(start>=0 && end>start);
   const block=html.slice(start,end);
   assert.match(block,/Usamos la caché de entidades/);
