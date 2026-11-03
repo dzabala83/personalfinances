@@ -141,3 +141,17 @@ test('cloud sync snapshots a stable local state and only rewrites changed counte
   assert.match(block,/Propagamos UUID generados/);
   assert.match(block,/saveLocal\(\)/);
 });
+
+
+test('transaction editor exposes top-level movement type and refreshes category hierarchy',()=>{
+  const start=html.indexOf('function openEditTransaction(txId){');
+  const end=html.indexOf('\n\nfunction openManualForm(){',start);
+  assert.ok(start>=0&&end>start);
+  const block=html.slice(start,end);
+  assert.ok(block.includes('<label>Tipo de movimiento</label><select id="eTipo">'));
+  assert.ok(block.includes("refreshEditCategories(false)"));
+  assert.ok(block.includes("const selectedTipo=$('eTipo').value"));
+  assert.ok(block.includes("const convertingToRefund=selectedTipo==='Ingreso'"));
+  assert.ok(block.includes("tx.tipo=selectedTipo"));
+  assert.ok(block.includes("eIncomeKindField"));
+});
