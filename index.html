@@ -998,10 +998,10 @@ function cacheSubcategory(catId,name,id){
 function syncQueueStatus(){
   const dot=document.getElementById('nexoSyncDot');
   const sub=document.getElementById('headerSub');
-  const hasQueue=pendingSyncQueue.length>0;
+  const hasQueue=pendingSyncQueue.length>0||!!readStateSyncMarker();
   if(dot) dot.classList.toggle('cloud',!!cloudActive&&!hasQueue);
   if(sub){
-    if(hasQueue) sub.textContent=pendingSyncWorkerRunning?'Sincronizando…':'Cambios pendientes';
+    if(hasQueue) sub.textContent=(pendingSyncWorkerRunning||stateSyncWorkerRunning)?'Sincronizando…':'Cambios pendientes';
     else sub.textContent=cloudActive?'Sincronizado':'Solo este dispositivo';
   }
 }
@@ -1321,9 +1321,15 @@ async function auditSupabaseConnection(){
   return true;
 }
 
-async function saveState(){
+async function syncStateToCloud(){
+  const liveTxById=new Map((state.transactions||[]).map(t=>[t.id,t]));
+  const liveCatByKey=new Map((state.categories||[]).map(c=>[c.tipo+'|'+c.nombre,c]));
+  const liveRuleById=new Map((state.rules||[]).map(r=>[r.id,r]));
+  const liveCounterpartyByName=new Map((state.contrapartes||[]).map(p=>[p.nombre,p]));
+  const originalTxIds=(state.transactions||[]).map(t=>t.id);
+  const originalRuleIds=(state.rules||[]).map(r=>r.id);
+  const syncState=JSON.parse(JSON.stringify(state));
   // Guardado local inmediato. La nube recibe SOLO los registros que cambiaron.
-  saveLocal();
   if(!currentUser) return {cloud:false};
 
   const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
@@ -1337,7 +1343,7 @@ async function saveState(){
     // Si una entidad es nueva, generamos su UUID y la enviamos por upsert.
     const catByKey={};
     const catRows=[];
-    for(const c of state.categories){
+    for(const c of syncState.categories){
       const key=c.tipo+'|'+c.nombre;
       let id=cloudEntityCache.categories.get(key);
       if(!UUID_RE.test(id||'')) id=UUID_RE.test(c.id||'')?c.id:crypto.randomUUID();
@@ -1353,7 +1359,7 @@ async function saveState(){
 
     const subMap={};
     const subRows=[];
-    state.categories.forEach(c=>{
+    syncState.categories.forEach(c=>{
       const catId=catByKey[c.tipo+'|'+c.nombre];
       (c.subcategorias||[]).forEach(name=>{
         const key=catId+'|'+name;
@@ -1372,7 +1378,7 @@ async function saveState(){
     // --- Reglas: solo insertamos reglas nuevas. No reconstruimos las 122 existentes. ---
     const existingRuleIds=new Set((cloudSnapshot?.rules||[]).map(r=>r.id));
     const newRuleRows=[];
-    (state.rules||[]).forEach(x=>{
+    (syncState.rules||[]).forEach(x=>{
       if(UUID_RE.test(x.id||'') && existingRuleIds.has(x.id)) return;
       const id=UUID_RE.test(x.id||'') ? x.id : crypto.randomUUID();
       x.id=id;
@@ -1393,7 +1399,7 @@ async function saveState(){
     const previousTx=cloudSnapshot?.transactions||[];
     const previousById=Object.fromEntries(previousTx.map(t=>[t.id,t]));
     const counterpartRows=[];
-    for(const p of (state.contrapartes||[])){
+    for(const p of (syncState.contrapartes||[])){
       if(!p.nombre||!p.nombre.trim()) continue;
       if(!UUID_RE.test(p.id||'')) p.id=crypto.randomUUID();
       counterpartRows.push({id:p.id,usuario_id:user_id,nombre:p.nombre.trim(),tipo:p.tipo||'Persona',telefono:p.telefono||null,email:p.email||null,notas:p.notas||null,activo:p.activo!==false,updated_at:new Date().toISOString()});
@@ -1402,7 +1408,7 @@ async function saveState(){
     const txRows=[];
     const currentIds=new Set();
 
-    for(const tx of (state.transactions||[])){
+    for(const tx of (syncState.transactions||[])){
       let id=tx.id;
       if(!UUID_RE.test(id||'')){
         id=crypto.randomUUID();
@@ -1438,12 +1444,15 @@ async function saveState(){
       const r=await supabaseClient.from('transacciones').upsert(txRows,{onConflict:'id'});
       if(r.error) throw r.error;
     }
-    // Reemplaza las asignaciones de contraparte para las transacciones guardadas.
-    for(const tx of (state.transactions||[])){
+    // Solo reescribimos asignaciones cuando realmente cambiaron.
+    for(const tx of (syncState.transactions||[])){
       if(!UUID_RE.test(tx.id||'')) continue;
+      const oldAssignments=previousById[tx.id]?.contrapartesAsignadas||[];
+      const newAssignments=tx.contrapartesAsignadas||[];
+      if(previousById[tx.id] && same(oldAssignments,newAssignments)) continue;
       const del=await supabaseClient.from('transaccion_contrapartes').delete().eq('transaccion_id',tx.id).eq('usuario_id',user_id);
       if(del.error) throw del.error;
-      const assignments=(tx.contrapartesAsignadas||[]).filter(a=>a.contraparteId && (state.contrapartes||[]).some(p=>p.id===a.contraparteId)).map(a=>({
+      const assignments=(tx.contrapartesAsignadas||[]).filter(a=>a.contraparteId && (syncState.contrapartes||[]).some(p=>p.id===a.contraparteId)).map(a=>({
         usuario_id:user_id,transaccion_id:tx.id,contraparte_id:a.contraparteId,
         tipo_participacion:a.tipoParticipacion||'DEBE_REEMBOLSAR',monto_asignado:Number(a.monto)||0
       }));
@@ -1463,7 +1472,7 @@ async function saveState(){
 
     // --- Presupuestos del mes actual ---
     // Se sincronizan únicamente cuando cambió el contenido de presupuestos.
-    const budgetSignature=JSON.stringify((state.categories||[]).map(c=>({
+    const budgetSignature=JSON.stringify((syncState.categories||[]).map(c=>({
       id:c.id,p:c.presupuesto||0,s:c.subPresupuestos||{}
     })));
     if(budgetSignature !== cloudSnapshot?.budgetSignature){
@@ -1472,7 +1481,7 @@ async function saveState(){
       if(rDel.error) throw new Error('presupuestos DELETE: '+rDel.error.message);
 
       const budgetRows=[];
-      state.categories.forEach(c=>{
+      syncState.categories.forEach(c=>{
         const catId=catByKey[c.tipo+'|'+c.nombre];
         if(c.subcategorias?.length){
           c.subcategorias.forEach(name=>{
@@ -1495,13 +1504,19 @@ async function saveState(){
       }
     }
 
+    // Propagamos UUID generados durante la subida al estado vivo para evitar duplicados.
+    (syncState.categories||[]).forEach(c=>{const live=liveCatByKey.get(c.tipo+'|'+c.nombre);if(live)live.id=c.id;});
+    (syncState.transactions||[]).forEach((t,i)=>{const live=liveTxById.get(originalTxIds[i]);if(live)live.id=t.id;});
+    (syncState.rules||[]).forEach((r,i)=>{const live=liveRuleById.get(originalRuleIds[i]);if(live)live.id=r.id;});
+    (syncState.contrapartes||[]).forEach(p=>{const live=liveCounterpartyByName.get(p.nombre);if(live)live.id=p.id;});
+    saveLocal();
+
     // Actualizamos la foto local de nube después de confirmar todo.
     cloudSnapshot={
-      transactions:(state.transactions||[]).map(t=>({...t})),
-      rules:(state.rules||[]).map(r=>({...r})),
+      transactions:(syncState.transactions||[]).map(t=>({...t})),
+      rules:(syncState.rules||[]).map(r=>({...r})),
       budgetSignature
     };
-    saveLocal();
     cloudActive=true;
     return {cloud:true};
   }catch(error){
@@ -1510,6 +1525,101 @@ async function saveState(){
     return {cloud:false,error};
   }
 }
+
+
+
+/* ================= LOCAL-FIRST STATE SYNC =================
+ * Cada cambio se confirma primero en localStorage. La nube se actualiza
+ * mediante una cola persistente, debounce de 10s y respaldo cada 30s.
+ */
+const STATE_SYNC_DEBOUNCE_MS=10000;
+const STATE_SYNC_BACKUP_MS=30000;
+let stateSyncTimer=null;
+let stateSyncWorkerRunning=false;
+let stateSyncVersion=0;
+let stateSyncRetryTimer=null;
+let stateSyncRetryAttempt=0;
+
+function stateSyncKey(){
+  return currentUser?.id ? 'nexo_state_sync_pending_v1_'+currentUser.id : null;
+}
+function readStateSyncMarker(){
+  const key=stateSyncKey();
+  if(!key)return null;
+  try{return JSON.parse(localStorage.getItem(key)||'null');}catch(e){return null;}
+}
+function writeStateSyncMarker(){
+  const key=stateSyncKey();
+  if(!key)return;
+  stateSyncVersion++;
+  try{localStorage.setItem(key,JSON.stringify({version:stateSyncVersion,updatedAt:new Date().toISOString()}));}
+  catch(e){console.warn('No se pudo registrar la sincronización pendiente:',e);}
+}
+function scheduleStateSync(delay=STATE_SYNC_DEBOUNCE_MS){
+  if(!currentUser||!readStateSyncMarker()||!navigator.onLine)return;
+  if(stateSyncTimer)clearTimeout(stateSyncTimer);
+  stateSyncTimer=setTimeout(()=>{stateSyncTimer=null;flushStateSync();},delay);
+  syncQueueStatus();
+}
+async function flushStateSync(){
+  if(stateSyncWorkerRunning||!currentUser||!navigator.onLine||!readStateSyncMarker())return;
+  stateSyncWorkerRunning=true;
+  const marker=readStateSyncMarker();
+  syncQueueStatus();
+  try{
+    const result=await syncStateToCloud();
+    if(!result?.cloud)throw result?.error||new Error('La nube no confirmó la sincronización');
+    const latest=readStateSyncMarker();
+    if(latest?.version===marker?.version){
+      const key=stateSyncKey();
+      if(key)localStorage.removeItem(key);
+      stateSyncRetryAttempt=0;
+    }else{
+      scheduleStateSync(0);
+    }
+  }catch(error){
+    console.error('Error sincronizando cambios locales:',error);
+    cloudActive=false;
+    const delay=Math.min(60000,2000*Math.pow(2,stateSyncRetryAttempt));
+    stateSyncRetryAttempt=Math.min(stateSyncRetryAttempt+1,5);
+    if(stateSyncRetryTimer)clearTimeout(stateSyncRetryTimer);
+    stateSyncRetryTimer=setTimeout(()=>{stateSyncRetryTimer=null;flushStateSync();},delay);
+  }finally{
+    stateSyncWorkerRunning=false;
+    syncQueueStatus();
+  }
+}
+async function saveState(){
+  // Confirmación local: nunca se revierte un cambio por un fallo de red.
+  saveLocal();
+  if(!currentUser)return {cloud:false,local:true};
+  writeStateSyncMarker();
+  scheduleStateSync(STATE_SYNC_DEBOUNCE_MS);
+  return {cloud:true,local:true,queued:true};
+}
+window.__nexoStateSyncDiagnostics=()=>({
+  pending:!!readStateSyncMarker(),
+  workerRunning:stateSyncWorkerRunning,
+  debounceMs:STATE_SYNC_DEBOUNCE_MS,
+  backupMs:STATE_SYNC_BACKUP_MS,
+  retryAttempt:stateSyncRetryAttempt,
+  online:navigator.onLine,
+  cloudActive
+});
+setInterval(()=>{
+  if(readStateSyncMarker())scheduleStateSync(0);
+},STATE_SYNC_BACKUP_MS);
+window.addEventListener('online',()=>{
+  if(readStateSyncMarker())scheduleStateSync(0);
+  syncPendingQueue();
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'&&readStateSyncMarker())scheduleStateSync(0);
+});
+window.addEventListener('pagehide',()=>{
+  // El estado ya está persistido localmente; se solicita un flush best-effort.
+  if(readStateSyncMarker())flushStateSync();
+});
 
 
 async function initApp(){
@@ -1522,7 +1632,8 @@ async function initApp(){
     // se sube la información inicial.
     const cloudData=await loadFromSupabase();
     if(cloudData){
-      state=cloudData;
+      const pendingLocalState=readStateSyncMarker()?loadLocal():null;
+      state=pendingLocalState||cloudData;
       cloudSnapshot={
         transactions:(state.transactions||[]).map(t=>({...t})),
         rules:(state.rules||[]).map(r=>({...r})),
@@ -1537,6 +1648,7 @@ async function initApp(){
       render();
       syncQueueStatus();
       syncPendingQueue();
+      if(readStateSyncMarker())scheduleStateSync(0);
       return;
     }
 
@@ -1603,6 +1715,7 @@ async function initApp(){
     cloudActive=false;
     finishInit();
     render();
+    if(readStateSyncMarker())scheduleStateSync(0);
     showToast('No se pudo conectar a la nube. Usando datos locales.');
   }
 }
