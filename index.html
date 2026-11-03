@@ -2512,17 +2512,16 @@ function renderTransacciones(app){
 function openEditTransaction(txId){
   const tx=state.transactions.find(t=>t.id===txId);
   if(!tx)return;
-  const isIncome=tx.tipo==='Ingreso';
   const isExistingRefund=tx.metadata?.kind==='refund';
   const overlay=document.createElement('div');
   overlay.className='edit-transaction-overlay';
   overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;';
-  const cats=state.categories.filter(c=>c.tipo===tx.tipo);
-  const originalExpenses=(state.transactions||[]).filter(t=>t.tipo==='Gasto'&&t.id!==tx.id&&t.metadata?.kind!=='refund').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+    const originalExpenses=(state.transactions||[]).filter(t=>t.tipo==='Gasto'&&t.id!==tx.id&&t.metadata?.kind!=='refund').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
   overlay.innerHTML=`
     <div class="card edit-transaction-modal" style="max-width:440px;width:100%;max-height:90vh;overflow-y:auto;">
       <h3 class="cat-title">Editar transacción</h3>
-      ${isIncome?'<div class="field"><label>Tipo de movimiento</label><select id="eMovementType"><option value="Ingreso">Ingreso ordinario</option><option value="Reembolso">Reembolso recibido</option></select></div>':''}
+      <div class="field"><label>Tipo de movimiento</label><select id="eTipo"><option value="Gasto" ${tx.tipo==='Gasto'?'selected':''}>Gasto</option><option value="Ingreso" ${tx.tipo==='Ingreso'?'selected':''}>Ingreso</option></select></div>
+      <div class="field" id="eIncomeKindField" style="display:${tx.tipo==='Ingreso'?'block':'none'}"><label>Clasificación del ingreso</label><select id="eMovementType"><option value="Ingreso">Ingreso ordinario</option><option value="Reembolso">Reembolso recibido</option></select></div>
       <div class="field"><label>Fecha</label><input type="date" id="eFecha" value="${tx.fecha||''}"></div>
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
       <div id="eRefundFields" style="display:none">
@@ -2531,7 +2530,7 @@ function openEditTransaction(txId){
         <div style="padding:10px 12px;border-radius:10px;background:var(--green-soft);color:var(--green);font-size:.82rem;margin-bottom:10px">Este movimiento aumentará tu saldo, pero no contará como ingreso ordinario.</div>
       </div>
       <div id="eOrdinaryFields">
-        <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${escapeHtml(c.nombre)}" ${c.nombre===tx.categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
+        <div class="field"><label>Categoría</label><select id="eCat"></select></div>
         <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
         <div class="field"><label>Personas involucradas</label><div id="eCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="eNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
       </div>
@@ -2555,29 +2554,44 @@ function openEditTransaction(txId){
   };
   renderEditAssignments();
   $('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{editAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderEditAssignments();});
-  function refreshSubs(){
-    const cat=getCategory(tx.tipo,$('eCat').value);
+  $('eMovementType').value=isExistingRefund?'Reembolso':'Ingreso';
+  $('eRefundCounterparty').value=tx.metadata?.counterpartyId||tx.contraparteId||'';
+  $('eRefundOriginal').value=tx.metadata?.originalTransactionId||'';
+  function refreshSubs(preferred=undefined){
+    const tipo=$('eTipo').value;
+    const cat=getCategory(tipo,$('eCat').value);
     const subs=cat?.subcategorias||[];
-    $('eSub').innerHTML='<option value="">(ninguna)</option>'+subs.map(sub=>'<option value="'+escapeHtml(sub)+'" '+(sub===tx.subcategoria?'selected':'')+'>'+escapeHtml(sub)+'</option>').join('');
+    const selected=preferred===undefined?tx.subcategoria:preferred;
+    $('eSub').innerHTML='<option value="">(ninguna)</option>'+subs.map(sub=>'<option value="'+escapeHtml(sub)+'" '+(sub===selected?'selected':'')+'>'+escapeHtml(sub)+'</option>').join('');
   }
-  if(isIncome){
-    $('eMovementType').value=isExistingRefund?'Reembolso':'Ingreso';
-    $('eRefundCounterparty').value=tx.metadata?.counterpartyId||tx.contraparteId||'';
-    $('eRefundOriginal').value=tx.metadata?.originalTransactionId||'';
-    $('eMovementType').onchange=()=>{
-      const refund=$('eMovementType').value==='Reembolso';
-      $('eRefundFields').style.display=refund?'block':'none';
-      $('eOrdinaryFields').style.display=refund?'none':'block';
-    };
-    $('eMovementType').onchange();
+  function refreshEditCategories(preserve=true){
+    const tipo=$('eTipo').value;
+    const categories=state.categories.filter(c=>c.tipo===tipo);
+    const previous=preserve?$('eCat').value: '';
+    $('eCat').innerHTML=categories.map(c=>'<option value="'+escapeHtml(c.nombre)+'">'+escapeHtml(c.nombre)+'</option>').join('');
+    if(categories.some(c=>c.nombre===previous))$('eCat').value=previous;
+    else if(preserve && categories.some(c=>c.nombre===tx.categoria) && tipo===tx.tipo)$('eCat').value=tx.categoria;
+    refreshSubs(preserve && tipo===tx.tipo ? tx.subcategoria : '');
   }
-  $('eCat').onchange=refreshSubs;refreshSubs();
+  function refreshEditMovementMode(){
+    const income=$('eTipo').value==='Ingreso';
+    $('eIncomeKindField').style.display=income?'block':'none';
+    const refund=income && $('eMovementType').value==='Reembolso';
+    $('eRefundFields').style.display=refund?'block':'none';
+    $('eOrdinaryFields').style.display=refund?'none':'block';
+  }
+  $('eTipo').onchange=()=>{refreshEditCategories(false);refreshEditMovementMode();};
+  $('eMovementType').onchange=refreshEditMovementMode;
+  $('eCat').onchange=()=>refreshSubs('');
+  refreshEditCategories(true);
+  refreshEditMovementMode();
   $('eCancel').onclick=()=>overlay.remove();
   $('eSave').onclick=async()=>{
     const fecha=$('eFecha').value,monto=parseAmount($('eMonto').value);
     if(!fecha){showToast('Ingresa una fecha válida');return;}
     if(!monto||monto<=0){showToast('Ingresa un monto válido');return;}
-    const convertingToRefund=isIncome&&$('eMovementType').value==='Reembolso';
+    const selectedTipo=$('eTipo').value;
+    const convertingToRefund=selectedTipo==='Ingreso'&&$('eMovementType').value==='Reembolso';
     const oldTx={...tx,metadata:{...(tx.metadata||{})}};
     let newRefundCounterparty=null,newOriginalId=null;
     if(convertingToRefund){
@@ -2592,7 +2606,7 @@ function openEditTransaction(txId){
     }else{
       tx.metadata={...(tx.metadata||{})};
       if(tx.metadata.kind==='refund'){delete tx.metadata.kind;delete tx.metadata.direction;delete tx.metadata.counterpartyId;delete tx.metadata.originalTransactionId;delete tx.metadata.originalAmount;}
-      tx.tipo=oldTx.tipo;tx.categoria=$('eCat').value;tx.subcategoria=$('eSub').value||null;
+      tx.tipo=selectedTipo;tx.categoria=$('eCat').value;tx.subcategoria=$('eSub').value||null;
       tx.contrapartesAsignadas=editAssignments.map(a=>({...a,monto:Number(a.monto)}));
       const invalid=tx.contrapartesAsignadas.find(a=>!Number.isFinite(a.monto)||a.monto<=0);
       const allocated=tx.contrapartesAsignadas.reduce((sum,a)=>sum+a.monto,0);
