@@ -2018,7 +2018,7 @@ function renderDashboard(app){
   const months=[];for(let i=5;i>=0;i--)months.push(shiftMonth(currentMonth,-i));
   const monthNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const evolutionIncome=months.map(k=>nexoOrdinaryIncome(state.transactions.filter(t=>monthKey(t.fecha)===k)).reduce((s,t)=>s+Number(t.monto||0),0));
-  const evolutionExpense=months.map(k=>state.transactions.filter(t=>monthKey(t.fecha)===k&&t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0));
+  const evolutionExpense=months.map(k=>nexoNetExpenseTotalForPeriod(state.transactions.filter(t=>monthKey(t.fecha)===k)));
 
   const byCat={};txMonth.filter(t=>t.tipo==='Gasto').forEach(t=>{byCat[t.categoria]=(byCat[t.categoria]||0)+Number(t.monto||0);});
   const catEntries=Object.entries(byCat).sort((a,b)=>b[1]-a[1]);const palette=['#2385ee','#20ad78','#f5b72f','#ef646d','#8958df','#58a8e8','#a6afc1','#e07b32','#5f6fd7','#27a5a0'];
@@ -4766,7 +4766,7 @@ document.addEventListener('click', async (event) => {
         principal.push({tx,direction,amount});
       });
     });
-    const settlements=(state.transactions||[]).filter(tx=>tx.metadata?.kind==='counterparty_settlement'&&tx.metadata?.counterpartyId===p.id);
+    const settlements=(state.transactions||[]).filter(tx=>(tx.metadata?.kind==='counterparty_settlement'||tx.metadata?.kind==='refund')&&tx.metadata?.counterpartyId===p.id);
     let receivable=principal.filter(x=>x.direction==='RECEIVABLE').reduce((n,x)=>n+x.amount,0);
     let payable=principal.filter(x=>x.direction==='PAYABLE').reduce((n,x)=>n+x.amount,0);
     let received=0,paid=0;
