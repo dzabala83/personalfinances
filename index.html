@@ -2397,58 +2397,117 @@ function renderTransacciones(app){
 
 
 function openEditTransaction(txId){
-  const tx = state.transactions.find(t=>t.id===txId);
-  if(!tx) return;
+  const tx=state.transactions.find(t=>t.id===txId);
+  if(!tx)return;
+  const isIncome=tx.tipo==='Ingreso';
+  const isExistingRefund=tx.metadata?.kind==='refund';
   const overlay=document.createElement('div');
   overlay.className='edit-transaction-overlay';
-  overlay.style='position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;';
+  overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;';
   const cats=state.categories.filter(c=>c.tipo===tx.tipo);
+  const originalExpenses=(state.transactions||[]).filter(t=>t.tipo==='Gasto'&&t.id!==tx.id&&t.metadata?.kind!=='refund').sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
   overlay.innerHTML=`
-    <div class="card edit-transaction-modal" style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;">
+    <div class="card edit-transaction-modal" style="max-width:440px;width:100%;max-height:90vh;overflow-y:auto;">
       <h3 class="cat-title">Editar transacción</h3>
+      ${isIncome?'<div class="field"><label>Tipo de movimiento</label><select id="eMovementType"><option value="Ingreso">Ingreso ordinario</option><option value="Reembolso">Reembolso recibido</option></select></div>':''}
       <div class="field"><label>Fecha</label><input type="date" id="eFecha" value="${tx.fecha||''}"></div>
       <div class="field"><label>Monto (Bs)</label><input type="text" inputmode="decimal" id="eMonto" value="${Number(tx.monto||0).toFixed(2)}" onfocus="this.select()"></div>
-      <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${c.nombre}" ${c.nombre===tx.categoria?'selected':''}>${c.nombre}</option>`).join('')}</select></div>
-      <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
-      <div class="field"><label>Personas involucradas</label><div id="eCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="eNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
-      <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;">
-        <button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button>
+      <div id="eRefundFields" style="display:none">
+        <div class="field"><label>Persona / comercio que devuelve</label><select id="eRefundCounterparty"><option value="">Selecciona una contraparte</option>${(state.contrapartes||[]).filter(p=>p.activo!==false).map(p=>'<option value="'+escapeHtml(p.id)+'">'+escapeHtml(p.nombre)+'</option>').join('')}</select></div>
+        <div class="field"><label>Gasto original (opcional)</label><select id="eRefundOriginal"><option value="">Sin vincular a un gasto</option>${originalExpenses.map(t=>'<option value="'+escapeHtml(t.id)+'">'+escapeHtml(t.fecha||'')+' · '+escapeHtml(t.descripcion||'Gasto')+' · '+escapeHtml(fmtMoney(Number(t.monto)||0))+'</option>').join('')}</select><small style="color:var(--muted)">Vincúlalo para descontar el reembolso del gasto neto y mantener la trazabilidad.</small></div>
+        <div style="padding:10px 12px;border-radius:10px;background:var(--green-soft);color:var(--green);font-size:.82rem;margin-bottom:10px">Este movimiento aumentará tu saldo, pero no contará como ingreso ordinario.</div>
       </div>
+      <div id="eOrdinaryFields">
+        <div class="field"><label>Categoría</label><select id="eCat">${cats.map(c=>`<option value="${escapeHtml(c.nombre)}" ${c.nombre===tx.categoria?'selected':''}>${escapeHtml(c.nombre)}</option>`).join('')}</select></div>
+        <div class="field"><label>Subcategoría</label><select id="eSub"></select></div>
+        <div class="field"><label>Personas involucradas</label><div id="eCounterparties" style="display:grid;gap:8px"></div><button type="button" class="btn secondary" id="eNewContraparte" style="margin-top:8px">+ Crear persona/comercio</button><small style="color:var(--muted)">Selecciona todas las personas que participan y asigna cuánto debe reembolsar cada una.</small></div>
+      </div>
+      <div class="row-actions" style="justify-content:flex-end;margin-top:10px;gap:8px;"><button class="btn secondary" id="eCancel">Cancelar</button><button class="btn" id="eSave">Guardar cambios</button></div>
     </div>`;
   document.body.appendChild(overlay);
-  const eContraparte=document.getElementById('eContraparte');
-  const editAssignments=(tx.contrapartesAsignadas|| (tx.contraparteId?[{contraparteId:tx.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[])).map(a=>({...a}));
-  const renderEditAssignments=()=>{const box=document.getElementById('eCounterparties');box.innerHTML='';(state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{const selected=editAssignments.find(a=>a.contraparteId===p.id);const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 112px 92px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><select aria-label="Dirección de la deuda"><option value="DEBE_REEMBOLSAR" '+(selected?.tipoParticipacion!=='USUARIO_DEBE'?'selected':'')+'>Me deben</option><option value="USUARIO_DEBE" '+(selected?.tipoParticipacion==='USUARIO_DEBE'?'selected':'')+'>Yo debo</option></select><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]');check.onchange=()=>{const ix=editAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)editAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)editAssignments.splice(ix,1);amount.disabled=!check.checked;};const direction=row.querySelector('select');direction.onchange=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.tipoParticipacion=direction.value;};amount.oninput=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};box.appendChild(row);});};
+  const $=id=>overlay.querySelector('#'+id);
+  const editAssignments=(tx.contrapartesAsignadas||(tx.contraparteId?[{contraparteId:tx.contraparteId,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'}]:[])).map(a=>({...a}));
+  const renderEditAssignments=()=>{
+    const box=$('eCounterparties');box.innerHTML='';
+    (state.contrapartes||[]).filter(p=>p.activo!==false).forEach(p=>{
+      const selected=editAssignments.find(a=>a.contraparteId===p.id);
+      const row=document.createElement('div');row.style='display:grid;grid-template-columns:24px minmax(0,1fr) 112px 92px;gap:8px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:10px';
+      row.innerHTML='<input type="checkbox" '+(selected?'checked':'')+' aria-label="Seleccionar '+escapeHtml(p.nombre)+'"><span>'+escapeHtml(p.nombre)+' <small style="color:var(--muted)">'+escapeHtml(p.tipo)+'</small></span><select aria-label="Dirección de la deuda"><option value="DEBE_REEMBOLSAR" '+(selected?.tipoParticipacion!=='USUARIO_DEBE'?'selected':'')+'>Me deben</option><option value="USUARIO_DEBE" '+(selected?.tipoParticipacion==='USUARIO_DEBE'?'selected':'')+'>Yo debo</option></select><input type="number" min="0" step="0.01" placeholder="Bs" value="'+(selected?selected.monto||'':'')+'" '+(selected?'':'disabled')+' aria-label="Monto de '+escapeHtml(p.nombre)+'">';
+      const check=row.querySelector('input[type=checkbox]'),amount=row.querySelector('input[type=number]'),direction=row.querySelector('select');
+      check.onchange=()=>{const ix=editAssignments.findIndex(a=>a.contraparteId===p.id);if(check.checked&&ix<0)editAssignments.push({contraparteId:p.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});else if(!check.checked&&ix>=0)editAssignments.splice(ix,1);amount.disabled=!check.checked;};
+      direction.onchange=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.tipoParticipacion=direction.value;};
+      amount.oninput=()=>{const a=editAssignments.find(a=>a.contraparteId===p.id);if(a)a.monto=Number(amount.value)||0;};
+      box.appendChild(row);
+    });
+  };
   renderEditAssignments();
-  document.getElementById('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{editAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderEditAssignments();});
+  $('eNewContraparte').onclick=()=>openCounterpartyForm(null,created=>{editAssignments.push({contraparteId:created.id,monto:0,tipoParticipacion:'DEBE_REEMBOLSAR'});renderEditAssignments();});
   function refreshSubs(){
-    const cat=getCategory(tx.tipo,document.getElementById('eCat').value);
+    const cat=getCategory(tx.tipo,$('eCat').value);
     const subs=cat?.subcategorias||[];
-    document.getElementById('eSub').innerHTML='<option value="">(ninguna)</option>'+subs.map(s=>`<option value="${s}" ${s===tx.subcategoria?'selected':''}>${s}</option>`).join('');
+    $('eSub').innerHTML='<option value="">(ninguna)</option>'+subs.map(sub=>'<option value="'+escapeHtml(sub)+'" '+(sub===tx.subcategoria?'selected':'')+'>'+escapeHtml(sub)+'</option>').join('');
   }
-  document.getElementById('eCat').onchange=refreshSubs;
-  refreshSubs();
-  document.getElementById('eCancel').onclick=()=>overlay.remove();
-  document.getElementById('eSave').onclick=()=>{
-    const fecha=document.getElementById('eFecha').value;
-    const monto=parseAmount(document.getElementById('eMonto').value);
+  if(isIncome){
+    $('eMovementType').value=isExistingRefund?'Reembolso':'Ingreso';
+    $('eRefundCounterparty').value=tx.metadata?.counterpartyId||tx.contraparteId||'';
+    $('eRefundOriginal').value=tx.metadata?.originalTransactionId||'';
+    $('eMovementType').onchange=()=>{
+      const refund=$('eMovementType').value==='Reembolso';
+      $('eRefundFields').style.display=refund?'block':'none';
+      $('eOrdinaryFields').style.display=refund?'none':'block';
+    };
+    $('eMovementType').onchange();
+  }
+  $('eCat').onchange=refreshSubs;refreshSubs();
+  $('eCancel').onclick=()=>overlay.remove();
+  $('eSave').onclick=async()=>{
+    const fecha=$('eFecha').value,monto=parseAmount($('eMonto').value);
     if(!fecha){showToast('Ingresa una fecha válida');return;}
-    if(!monto || monto<=0){showToast('Ingresa un monto válido');return;}
-    tx.fecha=fecha;
-    tx.monto=monto;
-    tx.categoria=document.getElementById('eCat').value;
-    tx.subcategoria=document.getElementById('eSub').value||null;
-    const invalidEdit=editAssignments.find(a=>!Number.isFinite(Number(a.monto))||Number(a.monto)<=0);
-    const allocatedEdit=editAssignments.reduce((sum,a)=>sum+(Number(a.monto)||0),0);
-    if(invalidEdit){showToast('Indica un importe mayor a cero para cada contraparte');return;}
-    if(allocatedEdit>monto+0.001){showToast('La suma de los reembolsos no puede superar el monto de la transacción');return;}
-    tx.contrapartesAsignadas=editAssignments.map(a=>({...a,monto:Number(a.monto)}));
-    tx.contraparteId=editAssignments[0]?.contraparteId||null;
-    const result=saveState();
-    if(result && typeof result.then==='function') result.then(r=>{ if(r?.cloud===false) showToast('⚠️ No se pudo guardar en la nube'); else showToast('✅ Transacción actualizada'); });
-    else showToast('Transacción actualizada');
-    overlay.remove();
-    render();
+    if(!monto||monto<=0){showToast('Ingresa un monto válido');return;}
+    const convertingToRefund=isIncome&&$('eMovementType').value==='Reembolso';
+    const oldTx={...tx,metadata:{...(tx.metadata||{})}};
+    let newRefundCounterparty=null,newOriginalId=null;
+    if(convertingToRefund){
+      newRefundCounterparty=$('eRefundCounterparty').value||null;
+      newOriginalId=$('eRefundOriginal').value||null;
+      if(!newRefundCounterparty){showToast('Selecciona la persona o comercio que realizó el reembolso');return;}
+      const original=newOriginalId?(state.transactions||[]).find(t=>t.id===newOriginalId):null;
+      if(newOriginalId&&!original){showToast('No se encontró el gasto original');return;}
+      if(original&&original.tipo!=='Gasto'){showToast('Solo puedes vincular el reembolso a un gasto');return;}
+      tx.tipo='Ingreso';tx.categoria=null;tx.subcategoria=null;tx.contraparteId=newRefundCounterparty;tx.contrapartesAsignadas=[];
+      tx.metadata={...(tx.metadata||{}),kind:'refund',direction:'RECEIVABLE',counterpartyId:newRefundCounterparty,originalTransactionId:newOriginalId,originalAmount:original?Number(original.monto)||0:null};
+    }else{
+      tx.metadata={...(tx.metadata||{})};
+      if(tx.metadata.kind==='refund'){delete tx.metadata.kind;delete tx.metadata.direction;delete tx.metadata.counterpartyId;delete tx.metadata.originalTransactionId;delete tx.metadata.originalAmount;}
+      tx.tipo=oldTx.tipo;tx.categoria=$('eCat').value;tx.subcategoria=$('eSub').value||null;
+      tx.contrapartesAsignadas=editAssignments.map(a=>({...a,monto:Number(a.monto)}));
+      const invalid=tx.contrapartesAsignadas.find(a=>!Number.isFinite(a.monto)||a.monto<=0);
+      const allocated=tx.contrapartesAsignadas.reduce((sum,a)=>sum+a.monto,0);
+      if(invalid){showToast('Indica un importe mayor a cero para cada contraparte');return;}
+      if(allocated>monto+0.001){showToast('La suma de las asignaciones no puede superar el monto de la transacción');return;}
+      tx.contraparteId=tx.contrapartesAsignadas[0]?.contraparteId||null;
+    }
+    tx.fecha=fecha;tx.monto=monto;
+    const button=$('eSave');button.disabled=true;button.textContent='Guardando…';
+    const result=await saveState();
+    if(result?.cloud===false&&currentUser){
+      Object.assign(tx,oldTx);saveLocal();button.disabled=false;button.textContent='Guardar cambios';
+      showToast('No se pudo guardar en la nube. No se aplicaron los cambios.');return;
+    }
+    if(currentUser&&UUID_RE.test(String(tx.id||''))){
+      try{
+        const del=await supabaseClient.from('transacciones_relacionadas').delete().eq('usuario_id',currentUser.id).or('transaccion_id.eq.'+tx.id+',transaccion_relacionada_id.eq.'+tx.id);
+        if(del.error)throw del.error;
+        if(convertingToRefund&&newOriginalId&&UUID_RE.test(String(newOriginalId))){
+          const rel=await supabaseClient.from('transacciones_relacionadas').insert({usuario_id:currentUser.id,transaccion_id:newOriginalId,transaccion_relacionada_id:tx.id,tipo_relacion:'REEMBOLSO',monto_relacionado:monto,notas:'Reembolso convertido desde ingreso importado'});
+          if(rel.error)throw rel.error;
+        }
+      }catch(err){
+        console.error('Error actualizando vínculo de reembolso:',err);
+        showToast('El movimiento se guardó, pero no se pudo actualizar su vínculo con el gasto. Revisa la sincronización.');
+      }
+    }
+    overlay.remove();render();showToast(convertingToRefund?'Ingreso convertido en reembolso':'Transacción actualizada');
   };
 }
 
