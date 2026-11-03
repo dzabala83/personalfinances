@@ -92,3 +92,52 @@ test('state sync uses entity cache instead of full category/subcategory SELECTs'
   assert.doesNotMatch(block,/from\('categorias'\)\.select\('id,tipo,nombre'\)/);
   assert.doesNotMatch(block,/from\('subcategorias'\)\.select\('id,categoria_id,nombre'\)/);
 });
+
+test('local-first save persists immediately and queues cloud sync without waiting for network',()=>{
+  const start=html.indexOf('async function saveState(){');
+  const end=html.indexOf('window.__nexoStateSyncDiagnostics',start);
+  assert.ok(start>=0&&end>start);
+  const block=html.slice(start,end);
+  assert.ok(block.indexOf('saveLocal();')<block.indexOf('writeStateSyncMarker();'));
+  assert.match(block,/scheduleStateSync\(STATE_SYNC_DEBOUNCE_MS\)/);
+  assert.match(block,/return \{cloud:true,local:true,queued:true\}/);
+  assert.doesNotMatch(block,/await syncStateToCloud/);
+});
+
+test('local-first sync has 10s debounce, 30s safety flush and persistent per-user marker',()=>{
+  assert.match(html,/const STATE_SYNC_DEBOUNCE_MS=10000/);
+  assert.match(html,/const STATE_SYNC_BACKUP_MS=30000/);
+  assert.match(html,/nexo_state_sync_pending_v1_/);
+  assert.match(html,/setInterval\(\(\)=>\{/);
+  assert.match(html,/window\.addEventListener\('online'/);
+  assert.match(html,/document\.addEventListener\('visibilitychange'/);
+  assert.match(html,/window\.addEventListener\('pagehide'/);
+});
+
+test('cloud sync retries failures and preserves the pending marker until confirmation',()=>{
+  const start=html.indexOf('async function flushStateSync(){');
+  const end=html.indexOf('async function saveState(){',start);
+  assert.ok(start>=0&&end>start);
+  const block=html.slice(start,end);
+  assert.match(block,/if\(!result\?\.cloud\)throw/);
+  assert.match(block,/latest\?\.version===marker\?\.version/);
+  assert.match(block,/Math\.min\(60000,2000\*Math\.pow\(2,stateSyncRetryAttempt\)\)/);
+  assert.match(block,/localStorage\.removeItem\(key\)/);
+});
+
+test('pending local changes are restored before cloud hydration after reload',()=>{
+  assert.match(html,/const pendingLocalState=readStateSyncMarker\(\)\?loadLocal\(\):null/);
+  assert.match(html,/state=pendingLocalState\|\|cloudData/);
+  assert.match(html,/if\(readStateSyncMarker\(\)\)scheduleStateSync\(0\)/);
+});
+
+test('cloud sync snapshots a stable local state and only rewrites changed counterparty assignments',()=>{
+  const start=html.indexOf('async function syncStateToCloud(){');
+  const end=html.indexOf('/* ================= LOCAL-FIRST STATE SYNC',start);
+  assert.ok(start>=0&&end>start);
+  const block=html.slice(start,end);
+  assert.match(block,/const syncState=JSON\.parse\(JSON\.stringify\(state\)\)/);
+  assert.match(block,/same\(oldAssignments,newAssignments\)/);
+  assert.match(block,/Propagamos UUID generados/);
+  assert.match(block,/saveLocal\(\)/);
+});
