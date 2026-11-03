@@ -1848,8 +1848,8 @@ function renderDashboardMobile(app){
   wrap.className='mobile-summary-shell';
 
   const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
-  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((sum,t)=>sum+Number(t.monto||0),0);
-  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((sum,t)=>sum+Number(t.monto||0),0);
+  const ingresos=nexoOrdinaryIncome(txMonth).reduce((sum,t)=>sum+Number(t.monto||0),0);
+  const gastos=nexoNetExpenseTotalForPeriod(txMonth);
 
   const monthNav=document.createElement('div');
   monthNav.className='mobile-month-control';
@@ -1978,8 +1978,8 @@ function renderDashboard(app){
   if(window.innerWidth<=600){renderDashboardMobile(app);return;}
   const wrap=document.createElement('div');wrap.className='approved-dashboard';
   const txMonth=state.transactions.filter(t=>monthKey(t.fecha)===currentMonth);
-  const ingresos=txMonth.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto||0),0);
-  const gastos=txMonth.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0);
+  const ingresos=nexoOrdinaryIncome(txMonth).reduce((s,t)=>s+Number(t.monto||0),0);
+  const gastos=nexoNetExpenseTotalForPeriod(txMonth);
   const balance=ingresos-gastos;
   const gastoCats=state.categories.filter(c=>c.tipo==='Gasto');
   const totalBudget=gastoCats.reduce((s,c)=>s+Number(categoryBudget(c)||0),0);
@@ -2017,7 +2017,7 @@ function renderDashboard(app){
 
   const months=[];for(let i=5;i>=0;i--)months.push(shiftMonth(currentMonth,-i));
   const monthNames=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const evolutionIncome=months.map(k=>state.transactions.filter(t=>monthKey(t.fecha)===k&&t.tipo==='Ingreso').reduce((s,t)=>s+Number(t.monto||0),0));
+  const evolutionIncome=months.map(k=>nexoOrdinaryIncome(state.transactions.filter(t=>monthKey(t.fecha)===k)).reduce((s,t)=>s+Number(t.monto||0),0));
   const evolutionExpense=months.map(k=>state.transactions.filter(t=>monthKey(t.fecha)===k&&t.tipo==='Gasto').reduce((s,t)=>s+Number(t.monto||0),0));
 
   const byCat={};txMonth.filter(t=>t.tipo==='Gasto').forEach(t=>{byCat[t.categoria]=(byCat[t.categoria]||0)+Number(t.monto||0);});
@@ -4889,7 +4889,7 @@ document.addEventListener('click', async (event) => {
       refundPanel.id='mRefundFields';
       refundPanel.style.display='none';
       refundPanel.innerHTML=`
-        <div class="field"><label>Contraparte (opcional)</label><select id="mRefundCounterparty"><option value="">Sin contraparte</option>${(state.contrapartes||[]).filter(p=>p.activo!==false).map(p=>'<option value="'+escape(p.id)+'">'+escape(p(p.nombre))+'</option>').join('')}</select></div>
+        <div class="field"><label>Contraparte (opcional)</label><select id="mRefundCounterparty"><option value="">Sin contraparte</option>${(state.contrapartes||[]).filter(p=>p.activo!==false).map(p=>'<option value="'+escape(p.id)+'">'+escape(p.nombre)+'</option>').join('')}</select></div>
         <div class="field"><label>Gasto original (opcional)</label><select id="mRefundOriginal"><option value="">Sin vincular a un gasto</option>${(state.transactions||[]).filter(t=>t.tipo==='Gasto'&&!isRefund(t)).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))).map(t=>'<option value="'+escape(t.id)+'">'+escape(t.fecha||'')+' · '+escape(t.descripcion||'Gasto')+' · '+escape(fmtMoney(Number(t.monto)||0))+'</option>').join('')}</select><small style="color:var(--muted)">Vincúlalo para consultar el gasto neto y mantener la trazabilidad.</small></div>
         <div style="padding:10px 12px;border-radius:10px;background:var(--green-soft);color:var(--green);font-size:.82rem;margin-bottom:10px">El reembolso aumenta el saldo, pero no se contabiliza como ingreso ordinario.</div>`;
       const desc=document.getElementById('mDesc');
@@ -4982,6 +4982,10 @@ document.addEventListener('click', async (event) => {
   window.nexoRefundTotalForPeriod=function(transactions){
     const ids=new Set((transactions||[]).filter(t=>t.tipo==='Gasto'&&!isRefund(t)).map(t=>t.id));
     return (state.transactions||[]).filter(t=>isRefund(t)&&t.metadata?.originalTransactionId&&ids.has(t.metadata.originalTransactionId)).reduce((n,t)=>n+(Number(t.monto)||0),0);
+  };
+  window.nexoNetExpenseTotalForPeriod=function(transactions){
+    const gross=(transactions||[]).filter(t=>t.tipo==='Gasto'&&!isRefund(t)).reduce((n,t)=>n+(Number(t.monto)||0),0);
+    return Math.max(0,gross-window.nexoRefundTotalForPeriod(transactions));
   };
   window.nexoOrdinaryIncome=tx=>(tx||[]).filter(t=>t.tipo==='Ingreso'&&!isRefund(t));
 })();
