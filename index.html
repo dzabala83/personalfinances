@@ -1001,7 +1001,7 @@ function syncQueueStatus(){
   const hasQueue=pendingSyncQueue.length>0||!!readStateSyncMarker();
   if(dot) dot.classList.toggle('cloud',!!cloudActive&&!hasQueue);
   if(sub){
-    if(hasQueue) sub.textContent=pendingSyncWorkerRunning?'Sincronizando…':'Cambios pendientes';
+    if(hasQueue) sub.textContent=(pendingSyncWorkerRunning||stateSyncWorkerRunning)?'Sincronizando…':'Cambios pendientes';
     else sub.textContent=cloudActive?'Sincronizado':'Solo este dispositivo';
   }
 }
@@ -1322,6 +1322,13 @@ async function auditSupabaseConnection(){
 }
 
 async function syncStateToCloud(){
+  const liveState=state;
+  const liveTxById=new Map((state.transactions||[]).map(t=>[t.id,t]));
+  const liveCatByKey=new Map((state.categories||[]).map(c=>[c.tipo+'|'+c.nombre,c]));
+  const liveRuleById=new Map((state.rules||[]).map(r=>[r.id,r]));
+  const liveCounterpartyByName=new Map((state.contrapartes||[]).map(p=>[p.nombre,p]));
+  const originalTxIds=(state.transactions||[]).map(t=>t.id);
+  const originalRuleIds=(state.rules||[]).map(r=>r.id);
   const syncState=JSON.parse(JSON.stringify(state));
   // Guardado local inmediato. La nube recibe SOLO los registros que cambiaron.
   if(!currentUser) return {cloud:false};
@@ -1498,6 +1505,13 @@ async function syncStateToCloud(){
       }
     }
 
+    // Propagamos UUID generados durante la subida al estado vivo para evitar duplicados.
+    (syncState.categories||[]).forEach(c=>{const live=liveCatByKey.get(c.tipo+'|'+c.nombre);if(live)live.id=c.id;});
+    (syncState.transactions||[]).forEach((t,i)=>{const live=liveTxById.get(originalTxIds[i]);if(live)live.id=t.id;});
+    (syncState.rules||[]).forEach((r,i)=>{const live=liveRuleById.get(originalRuleIds[i]);if(live)live.id=r.id;});
+    (syncState.contrapartes||[]).forEach(p=>{const live=liveCounterpartyByName.get(p.nombre);if(live)live.id=p.id;});
+    saveLocal();
+
     // Actualizamos la foto local de nube después de confirmar todo.
     cloudSnapshot={
       transactions:(syncState.transactions||[]).map(t=>({...t})),
@@ -1619,7 +1633,8 @@ async function initApp(){
     // se sube la información inicial.
     const cloudData=await loadFromSupabase();
     if(cloudData){
-      state=cloudData;
+      const pendingLocalState=readStateSyncMarker()?loadLocal():null;
+      state=pendingLocalState||cloudData;
       cloudSnapshot={
         transactions:(state.transactions||[]).map(t=>({...t})),
         rules:(state.rules||[]).map(r=>({...r})),
@@ -1634,6 +1649,7 @@ async function initApp(){
       render();
       syncQueueStatus();
       syncPendingQueue();
+      if(readStateSyncMarker())scheduleStateSync(0);
       return;
     }
 
